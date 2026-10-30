@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mnaseb SIM launcher icon for API 21-25 (adaptive icon on API 26+). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path
+        android:fillColor="@color/ic_launcher_background"
+        android:pathData="M54,0A54,54 0,1 1,54,108A54,54 0,1 1,54,0Z" />
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="1.3"
+        android:scaleY="1.3">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M39,30H62L72,40V75Q72,78 69,78H39Q36,78 36,75V33Q36,30 39,30Z" />
+        <path
+            android:fillColor="@color/ic_launcher_background"
+            android:pathData="M45,50H63Q66,50 66,53V67Q66,70 63,70H45Q42,70 42,67V53Q42,50 45,50Z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M42,59H66V61H42ZM53,50H55V70H53Z" />
+    </group>
+</vector>

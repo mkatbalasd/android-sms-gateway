@@ -13,7 +13,9 @@ android {
     compileSdk 33
 
     defaultConfig {
-        applicationId "me.capcom.smsgateway"
+        // Mnaseb SIM: own application id, installs beside the upstream app.
+        // The Kotlin namespace stays me.capcom.smsgateway to keep rebases small.
+        applicationId "com.mnaseb.sim"
         minSdk 21
         targetSdk 33
         versionCode 1
@@ -51,7 +53,9 @@ android {
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
-            signingConfig signingConfigs.release
+            // Mnaseb SIM: without app/keystore.jks the release APK is built
+            // unsigned (never debug-signed); CI signs it with apksigner.
+            signingConfig file("keystore.jks").exists() ? signingConfigs.release : null
             manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config"]
         }
     }

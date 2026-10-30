@@ -56,7 +56,9 @@ class GatewaySettings(
         private const val PRIVATE_TOKEN = "private_token"
         private const val NOTIFICATION_CHANNEL = "notification_channel"
 
-        const val PUBLIC_URL = "https://api.sms-gate.app/mobile/v1"
+        // Mnaseb SIM: the default (and only intended) server is the private
+        // Mnaseb server; the public upstream cloud is not offered.
+        const val PUBLIC_URL = "https://smsgate.mnaseb.com/api/mobile/v1"
     }
 
     override fun export(): Map<String, *> {

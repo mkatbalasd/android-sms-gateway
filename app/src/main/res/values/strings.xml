@@ -2,7 +2,7 @@
     <string name="address_is">%1$s</string>
     <string name="api_url_private_token_credentials_etc">API URL, private token, credentials, etc.</string>
     <string name="api_url">API URL</string>
-    <string name="app_name" translatable="false">SMSGate</string>
+    <string name="app_name" translatable="false">Mnaseb SIM</string>
     <string name="app_version_build">App version (build)</string>
     <string name="automatic_key_rotation">Automatic key rotation</string>
     <string name="battery_optimization_already_disabled">Battery optimization already disabled</string>
@@ -13,9 +13,7 @@
     <string name="by_code">By Code</string>
     <string name="can_affect_battery_life">can affect battery life</string>
     <string
-        name="click_continue_to_create_an_account_no_personal_information_is_required_nby_continuing_you_agree_to_our_privacy_policy_at_https_docs_sms_gate_app_privacy_policy">Click
-        Continue to create an account. No personal information is required.\nBy continuing, you
-        agree to our Privacy Policy at https://docs.sms-gate.app/privacy/policy/</string>
+        name="click_continue_to_create_an_account_no_personal_information_is_required_nby_continuing_you_agree_to_our_privacy_policy_at_https_docs_sms_gate_app_privacy_policy">Click Continue to create an account. No personal information is required.</string>
     <string name="cloud_server_dotdotdot">Cloud server…</string>
     <string name="cloud_server">Cloud server</string>
     <string name="cloud">Cloud</string>
@@ -44,7 +42,7 @@
     <string name="key_rotation_upload_failed">Key rotated, but the server upload failed. Will retry
         on the next launch.</string>
     <string name="key_rotated_successfully">Encryption key rotated</string>
-    <string name="ignored_for_public_server">Ignored for public server</string>
+    <string name="ignored_for_public_server">Access token issued by the private server</string>
     <string name="information">Information</string>
     <string name="internet_connection_available">Internet connection: available</string>
     <string name="internet_connection_unavailable">Internet connection: unavailable</string>
@@ -57,7 +55,7 @@
     <string name="listening_to_the_server_events">Listening to server events…</string>
     <string name="local_address">Local address</string>
     <string name="local_server_dotdotdot">Local Server…</string>
-    <string name="local_sms_gateway_notifications">Local SMSGate notifications</string>
+    <string name="local_sms_gateway_notifications">Local Mnaseb SIM notifications</string>
     <string name="local">Local</string>
     <string name="login_code_expires">Login Code, expires %1$s</string>
     <string name="login_code">Login Code</string>
@@ -117,8 +115,8 @@
     <string name="sign_in">Sign In</string>
     <string name="sign_up">Sign Up</string>
     <string name="signing_key">Signing Key</string>
-    <string name="sms_gateway_is_running_on_port">SMSGate is running on port %1$d</string>
-    <string name="sms_gateway">SMSGate</string>
+    <string name="sms_gateway_is_running_on_port">Mnaseb SIM is running on port %1$d</string>
+    <string name="sms_gateway">Mnaseb SIM</string>
     <string name="sms" translatable="false">sms</string>
     <string name="success_long_press_to_copy">Success, long press to copy</string>
     <string name="system">System</string>

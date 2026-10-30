@@ -12,10 +12,7 @@
     <string name="by_code">По коду</string>
     <string name="can_affect_battery_life">может влиять на время работы батареи</string>
     <string
-        name="click_continue_to_create_an_account_no_personal_information_is_required_nby_continuing_you_agree_to_our_privacy_policy_at_https_docs_sms_gate_app_privacy_policy">Нажмите
-        \"Продолжить\", чтобы создать аккаунт. Личная информация не требуется.\nПродолжая, вы
-        соглашаетесь с Политикой конфиденциальности по адресу
-        https://docs.sms-gate.app/privacy/policy/</string>
+        name="click_continue_to_create_an_account_no_personal_information_is_required_nby_continuing_you_agree_to_our_privacy_policy_at_https_docs_sms_gate_app_privacy_policy">Нажмите \"Продолжить\", чтобы создать аккаунт. Личная информация не требуется.</string>
     <string name="cloud_server_dotdotdot">Облачный сервер…</string>
     <string name="cloud_server">Облачный сервер</string>
     <string name="cloud">Облако</string>
@@ -100,7 +97,7 @@
     <string name="sign_up">Зарегистрироваться</string>
     <string name="signing_key">Ключ подписи</string>
     <string name="sms_gateway_is_running_on_port">SMS шлюз работает на порту %1$d</string>
-    <string name="sms_gateway">SMSGate</string>
+    <string name="sms_gateway">Mnaseb SIM</string>
     <string name="success_long_press_to_copy">Успешно, нажмите и удерживайте для копирования</string>
     <string name="system">Система</string>
     <string name="tab_text_home">Главная</string>

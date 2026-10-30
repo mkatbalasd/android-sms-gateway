@@ -12,9 +12,7 @@
     <string name="by_code">بواسطة الكود</string>
     <string name="can_affect_battery_life">يمكن أن يؤثر على عمر البطارية</string>
     <string
-        name="click_continue_to_create_an_account_no_personal_information_is_required_nby_continuing_you_agree_to_our_privacy_policy_at_https_docs_sms_gate_app_privacy_policy">انقر
-        فوق استمرار لإنشاء حساب. لا يلزم تقديم معلومات شخصية.\nمن خلال الاستمرار، فإنك توافق على
-        سياسة الخصوصية الخاصة بنا على https://docs.sms-gate.app/privacy/policy/</string>
+        name="click_continue_to_create_an_account_no_personal_information_is_required_nby_continuing_you_agree_to_our_privacy_policy_at_https_docs_sms_gate_app_privacy_policy">انقر فوق استمرار لإنشاء حساب. لا يلزم تقديم معلومات شخصية.</string>
     <string name="cloud_server_dotdotdot">خادم السحاب…</string>
     <string name="cloud_server">خادم السحاب</string>
     <string name="cloud">سحابي</string>
@@ -34,7 +32,7 @@
     <string name="failed_to_register_device">فشل تسجيل الجهاز: %1$s</string>
     <string name="id_copied">تم نسخ معرف الويب هوك إلى الحافظة</string>
     <string name="if_sim_number_is_not_specified_use">إذا لم يتم تحديد رقم SIM، استخدم</string>
-    <string name="ignored_for_public_server">يتم تجاهله للخادم العام</string>
+    <string name="ignored_for_public_server">رمز الوصول الصادر من الخادم الخاص</string>
     <string name="information">معلومات</string>
     <string name="internet_connection_available">اتصال الإنترنت: متوفر</string>
     <string name="internet_connection_unavailable">اتصال الإنترنت: غير متوفر</string>
@@ -47,7 +45,7 @@
     <string name="listening_to_the_server_events">الاستماع لأحداث الخادم…</string>
     <string name="local_address">العنوان المحلي</string>
     <string name="local_server_dotdotdot">خادم محلي…</string>
-    <string name="local_sms_gateway_notifications">إشعارات SMSGate المحلية</string>
+    <string name="local_sms_gateway_notifications">إشعارات Mnaseb SIM المحلية</string>
     <string name="local">محلي</string>
     <string name="login_code_expires">تنتهي صلاحية كود الدخول في %1$s</string>
     <string name="login_code">كود الدخول</string>
@@ -99,8 +97,8 @@
     <string name="sign_in">تسجيل الدخول</string>
     <string name="sign_up">إنشاء حساب</string>
     <string name="signing_key">مفتاح التوقيع</string>
-    <string name="sms_gateway_is_running_on_port">SMSGate يعمل على المنفذ %1$d</string>
-    <string name="sms_gateway">SMSGate</string>
+    <string name="sms_gateway_is_running_on_port">Mnaseb SIM يعمل على المنفذ %1$d</string>
+    <string name="sms_gateway">Mnaseb SIM</string>
     <string name="success_long_press_to_copy">نجاح، اضغط مطولاً للنسخ</string>
     <string name="system">النظام</string>
     <string name="tab_text_home">الرئيسية</string>

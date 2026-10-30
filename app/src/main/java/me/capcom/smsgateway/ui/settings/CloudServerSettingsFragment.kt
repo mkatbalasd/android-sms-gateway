@@ -50,9 +50,14 @@ class CloudServerSettingsFragment : BasePreferenceFragment() {
                 return@setOnPreferenceChangeListener true
             }
 
-            try {
-                URL(value)
+            val host = try {
+                URL(value).host.lowercase()
             } catch (e: Exception) {
+                showToast(getString(R.string.invalid_url))
+                return@setOnPreferenceChangeListener false
+            }
+            // Mnaseb SIM: the public upstream cloud is not offered.
+            if (host == "sms-gate.app" || host.endsWith(".sms-gate.app")) {
                 showToast(getString(R.string.invalid_url))
                 return@setOnPreferenceChangeListener false
             }
