@@ -2,7 +2,10 @@ name: Instrumented Tests
 
 on:
   pull_request: { types: [opened, synchronize, ready_for_review] }
-  push: { branches: [master] }
+  # Mnaseb SIM fork: also on push to mnaseb-sim (app or this workflow changed).
+  push:
+    branches: [master, mnaseb-sim]
+    paths: ["app/**", ".github/workflows/instrumented-tests.yml"]
 
 jobs:
   # Device-paired E2E lives behind Android Keystore, whose RSA-OAEP behaviour is
@@ -38,8 +41,40 @@ jobs:
             ~/.gradle/wrapper
           key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*') }}
 
+      # Fork-only change: the fork has no GOOGLE_SERVICES_JSON secret, so a
+      # placeholder config (no real Firebase project) is written instead. It
+      # only satisfies the google-services Gradle plugin; push is not exercised.
       - name: Setup Google Services
-        run: echo ${{ secrets.GOOGLE_SERVICES_JSON }} | base64 --decode > ./app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          PACKAGE_NAME: com.mnaseb.sim
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            echo "$GOOGLE_SERVICES_JSON" | base64 --decode > ./app/google-services.json
+          else
+            echo "::notice::GOOGLE_SERVICES_JSON not set - using a placeholder google-services.json"
+            cat > ./app/google-services.json <<EOF
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "placeholder-project",
+              "storage_bucket": "placeholder-project.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": { "package_name": "${PACKAGE_NAME}" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "AIzaSy000000000000000000000000000000000" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
 
       - name: Grant KVM
         run: |
@@ -64,7 +99,7 @@ jobs:
             ./gradlew :app:assembleDebug :app:assembleDebugAndroidTest
             adb install -r app/build/outputs/apk/debug/app-debug.apk
             adb install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-            adb shell am instrument -w me.capcom.smsgateway.test/androidx.test.runner.AndroidJUnitRunner | tee instrumented-output.txt
+            adb shell am instrument -w com.mnaseb.sim.test/androidx.test.runner.AndroidJUnitRunner | tee instrumented-output.txt
             if ! grep -qE "OK \([1-9][0-9]* tests?\)" instrumented-output.txt || grep -q "FAILURES!!!" instrumented-output.txt; then adb logcat -d > logcat.txt; exit 1; fi
 
       - name: Upload test report

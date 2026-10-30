@@ -9,7 +9,7 @@ jobs:
       matrix:
         build-type: [release, insecure]
     name: Build ${{ matrix.build-type }}
-    if: github.event.pull_request.draft == false
+    if: github.repository == 'capcom6/android-sms-gateway' && github.event.pull_request.draft == false
     uses: ./.github/workflows/build-apk.yml
     with:
       version-name: ${{ github.sha }}
@@ -23,7 +23,7 @@ jobs:
 
   release:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    if: github.repository == 'capcom6/android-sms-gateway' && github.event.pull_request.draft == false
     needs: [build]
     steps:
       - name: Download release artifacts

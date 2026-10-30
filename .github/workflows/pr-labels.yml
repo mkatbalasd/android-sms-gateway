@@ -6,6 +6,7 @@ on:
 
 jobs:
   remove_labels:
+    if: github.repository == 'capcom6/android-sms-gateway'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write # Grant permission to modify labels

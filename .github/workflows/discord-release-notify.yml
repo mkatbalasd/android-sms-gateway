@@ -7,7 +7,7 @@ on:
 jobs:
   notify-discord:
     runs-on: ubuntu-latest
-    if: github.event.release.prerelease == false
+    if: github.repository == 'capcom6/android-sms-gateway' && github.event.release.prerelease == false
     steps:
       - name: Send Discord Notification
         uses: capcom6/discord-webhook@3a447f4ed76c79ed32fb073d705bda1cd45119e6

@@ -5,6 +5,7 @@ on:
 
 jobs:
   close-issues:
+    if: github.repository == 'capcom6/android-sms-gateway'
     runs-on: ubuntu-latest
     permissions:
       issues: write

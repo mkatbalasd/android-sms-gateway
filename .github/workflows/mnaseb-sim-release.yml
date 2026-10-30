@@ -1,0 +1,180 @@
+name: Mnaseb SIM Release
+
+# Builds the Mnaseb SIM release APK.
+# - push to mnaseb-sim (app or this workflow changed): build, sign when the
+#   signing secrets exist, upload as a workflow artifact.
+# - tag mnaseb-sim-v<version>: same build; a signed APK and its SHA-256 are
+#   attached to a GitHub release. A tag never publishes an unsigned APK.
+#
+# Repository secrets (Settings > Secrets and variables > Actions):
+#   MNASEB_SIM_KEYSTORE_BASE64    PKCS12 keystore, base64-encoded
+#   MNASEB_SIM_KEYSTORE_PASSWORD  store password (also the key password)
+#   MNASEB_SIM_KEY_ALIAS          key alias (mnaseb-sim)
+#   MNASEB_SIM_GOOGLE_SERVICES_JSON  optional, base64 google-services.json;
+#                                    a placeholder is used when absent
+#
+# The release build type has no signing config unless app/keystore.jks
+# exists (it never does here), so Gradle emits an unsigned APK; it is
+# signed below with apksigner. A debug key is never used.
+
+on:
+  push:
+    branches: [mnaseb-sim]
+    paths: ["app/**", ".github/workflows/mnaseb-sim-release.yml"]
+    tags: ["mnaseb-sim-v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mnaseb-sim-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build release APK
+    runs-on: ubuntu-latest
+    outputs:
+      signed: ${{ steps.sign.outputs.signed }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup JAVA 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@ac638b010cf58a27ee6c972d7336334ccaf61c96 # v4.4.1
+
+      - name: Setup Google Services
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.MNASEB_SIM_GOOGLE_SERVICES_JSON }}
+        run: |
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" | base64 --decode > ./app/google-services.json
+          else
+            echo "::warning::MNASEB_SIM_GOOGLE_SERVICES_JSON not set - placeholder google-services.json, FCM push is not available in this build"
+            cat > ./app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "000000000000",
+              "project_id": "placeholder-project",
+              "storage_bucket": "placeholder-project.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:000000000000:android:0000000000000000",
+                  "android_client_info": { "package_name": "com.mnaseb.sim" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "AIzaSy000000000000000000000000000000000" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+          fi
+
+      - name: Set app version
+        id: version
+        run: |
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            VERSION="${GITHUB_REF_NAME#mnaseb-sim-v}"
+            if ! printf '%s' "$VERSION" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+([-.][0-9A-Za-z.]+)?$'; then
+              echo "::error::Tag $GITHUB_REF_NAME is not mnaseb-sim-v<major>.<minor>.<patch>"
+              exit 1
+            fi
+          else
+            VERSION="0.0.0-${GITHUB_SHA::7}"
+          fi
+          sed -i "s/versionName .*/versionName \"${VERSION}\"/" app/build.gradle
+          sed -i "s/versionCode .*/versionCode ${GITHUB_RUN_NUMBER}/" app/build.gradle
+          grep -E 'applicationId|versionName|versionCode' app/build.gradle
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Unit tests
+        run: ./gradlew test
+
+      - name: Build release APK (unsigned)
+        run: |
+          test ! -f app/keystore.jks
+          ./gradlew assembleRelease
+          ls -l app/build/outputs/apk/release/
+
+      - name: Sign APK
+        id: sign
+        env:
+          KS_BASE64: ${{ secrets.MNASEB_SIM_KEYSTORE_BASE64 }}
+          KS_PASSWORD: ${{ secrets.MNASEB_SIM_KEYSTORE_PASSWORD }}
+          KS_ALIAS: ${{ secrets.MNASEB_SIM_KEY_ALIAS }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          UNSIGNED=app/build/outputs/apk/release/app-release-unsigned.apk
+          test -f "$UNSIGNED"
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          mkdir -p dist
+          if [ -n "$KS_BASE64" ] && [ -n "$KS_PASSWORD" ] && [ -n "$KS_ALIAS" ]; then
+            KS_FILE="$RUNNER_TEMP/mnaseb-sim.p12"
+            trap 'rm -f "$KS_FILE"' EXIT
+            printf '%s' "$KS_BASE64" | base64 --decode > "$KS_FILE"
+            OUT="dist/mnaseb-sim-${VERSION}.apk"
+            "$BUILD_TOOLS/zipalign" -p -f 4 "$UNSIGNED" "$RUNNER_TEMP/aligned.apk"
+            "$BUILD_TOOLS/apksigner" sign \
+              --ks "$KS_FILE" --ks-type PKCS12 --ks-key-alias "$KS_ALIAS" \
+              --ks-pass env:KS_PASSWORD --key-pass env:KS_PASSWORD \
+              --out "$OUT" "$RUNNER_TEMP/aligned.apk"
+            "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT"
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            echo "Signed APK: \`$(basename "$OUT")\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            OUT="dist/mnaseb-sim-${VERSION}-unsigned.apk"
+            cp "$UNSIGNED" "$OUT"
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::Signing secrets MNASEB_SIM_KEYSTORE_BASE64 / MNASEB_SIM_KEYSTORE_PASSWORD / MNASEB_SIM_KEY_ALIAS are not all set - the APK is UNSIGNED and cannot be installed"
+            echo "**UNSIGNED build** - signing secrets are missing; \`$(basename "$OUT")\` cannot be installed." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          (cd dist && sha256sum *.apk > "$(basename "$OUT").sha256" && cat ./*.sha256)
+
+      - name: Upload APK
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mnaseb-sim-${{ steps.version.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    needs: [build]
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Refuse unsigned release
+        if: needs.build.outputs.signed != 'true'
+        run: |
+          echo "::error::Signing secrets are missing - a tag release is never published unsigned"
+          exit 1
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: mnaseb-sim-${{ needs.build.outputs.version }}
+          path: dist
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          ls -l dist
+          gh release create "$GITHUB_REF_NAME" dist/*.apk dist/*.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "Mnaseb SIM $VERSION" \
+            --notes "Mnaseb SIM $VERSION (com.mnaseb.sim), built from $GITHUB_SHA. SHA-256: $(cut -d' ' -f1 dist/*.sha256). Derived from android-sms-gateway (Apache-2.0); see NOTICE."

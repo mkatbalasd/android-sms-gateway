@@ -1,0 +1,11 @@
+Mnaseb SIM
+
+This product is derived from android-sms-gateway (SMSGate),
+https://github.com/capcom6/android-sms-gateway
+Copyright (c) the android-sms-gateway authors.
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+Modifications for Mnaseb SIM: application id, application name and
+launcher icon, default private server address, removal of the public
+cloud server option, and build/release workflows. The modified files
+are recorded in the git history of the `mnaseb-sim` branch.
