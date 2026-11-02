@@ -9,6 +9,9 @@ package me.capcom.smsgateway.modules.gateway
  * non-breaking space; the server then refuses an otherwise correct code.
  * Every code entry path (typed, pasted, QR scan, deep link) goes through
  * [clean]. The code's case is kept as entered (owner decision 0014, SIM-S1a).
+ *
+ * The characters are written as numeric code points, never as literals,
+ * so the source holds no invisible or bidi characters.
  */
 object LoginCodeSanitizer {
 
@@ -32,18 +35,21 @@ object LoginCodeSanitizer {
         return out.toString()
     }
 
+    // U+00A0 no-break space, U+2007 figure space, U+202F narrow no-break space.
     private fun isWhitespace(ch: Char): Boolean =
-        ch.isWhitespace() || ch == ' ' || ch == ' ' || ch == ' '
+        ch.isWhitespace() || ch.code == 0x00A0 || ch.code == 0x2007 || ch.code == 0x202F
 
     /**
-     * U+200B–U+200F (zero-width and directional marks), U+202A–U+202E
-     * (bidi embeddings and overrides), U+2060–U+2064 (word joiner and invisible
-     * operators), U+2066–U+2069 (bidi isolates) and U+FEFF (BOM / ZWNBSP).
+     * U+200B..U+200F (zero-width and directional marks), U+202A..U+202E
+     * (bidi embeddings and overrides), U+2060..U+2064 (word joiner and invisible
+     * operators), U+2066..U+2069 (bidi isolates) and U+FEFF (BOM / ZWNBSP).
      */
-    private fun isFormatChar(ch: Char): Boolean =
-        ch in '​'..'‏' ||
-            ch in '‪'..'‮' ||
-            ch in '⁠'..'⁤' ||
-            ch in '⁦'..'⁩' ||
-            ch == '﻿'
+    private fun isFormatChar(ch: Char): Boolean {
+        val c = ch.code
+        return c in 0x200B..0x200F ||
+            c in 0x202A..0x202E ||
+            c in 0x2060..0x2064 ||
+            c in 0x2066..0x2069 ||
+            c == 0xFEFF
+    }
 }

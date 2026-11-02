@@ -68,6 +68,9 @@ class HomeFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        pendingCode = savedInstanceState?.getString(STATE_PENDING_CODE)
+        pendingLabel = savedInstanceState?.getString(STATE_PENDING_LABEL)
+
         // Mnaseb SIM: the first-run dialog only links by one-time code; the
         // upstream Sign Up (anonymous) and Sign In (credentials) results are gone.
         setFragmentResultListener(FirstStartDialogFragment.REQUEST_KEY) { _, data ->
@@ -97,9 +100,28 @@ class HomeFragment : Fragment() {
      * carries the SIM cards; then register with the code; then start on boot.
      */
     private fun linkWithCode(code: String, label: String?) {
-        requestPermissionsThen {
-            registerAndStart(GatewayService.RegistrationMode.WithCode(code), label)
-        }
+        pendingCode = code
+        pendingLabel = label
+        requestPermissionsThen { runPendingLink() }
+    }
+
+    // The link waiting for the permission prompt; kept in saved state so a
+    // rotation or process restart during the prompt does not drop it.
+    private var pendingCode: String? = null
+    private var pendingLabel: String? = null
+
+    private fun runPendingLink() {
+        val code = pendingCode ?: return
+        val label = pendingLabel
+        pendingCode = null
+        pendingLabel = null
+        registerAndStart(GatewayService.RegistrationMode.WithCode(code), label)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_PENDING_CODE, pendingCode)
+        outState.putString(STATE_PENDING_LABEL, pendingLabel)
     }
 
     private fun registerAndStart(mode: GatewayService.RegistrationMode, label: String?) {
@@ -505,7 +527,9 @@ class HomeFragment : Fragment() {
                 .show()
         }
 
-        val then = afterPermissions ?: { start() }
+        // After a recreation the lambda is gone; a restored pending link wins.
+        val then = afterPermissions
+            ?: if (pendingCode != null) ({ runPendingLink() }) else ({ start() })
         afterPermissions = null
         then()
     }
@@ -536,6 +560,9 @@ class HomeFragment : Fragment() {
     }
 
     companion object {
+        private const val STATE_PENDING_CODE = "mnaseb.pending_code"
+        private const val STATE_PENDING_LABEL = "mnaseb.pending_label"
+
         @JvmStatic
         fun newInstance() =
             HomeFragment()

@@ -10,8 +10,8 @@ import me.capcom.smsgateway.databinding.DialogFirstStartBinding
 import com.journeyapps.barcodescanner.ScanContract
 import com.journeyapps.barcodescanner.ScanOptions
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
+import me.capcom.smsgateway.modules.gateway.LinkFlow
 import me.capcom.smsgateway.modules.gateway.LinkPayload
-import me.capcom.smsgateway.modules.gateway.LoginCodeSanitizer
 import org.koin.android.ext.android.inject
 
 /**
@@ -49,7 +49,7 @@ class FirstStartDialogFragment : DialogFragment() {
         // A deep link opens this screen with its payload.
         val payload = arguments?.getString(ARG_PAYLOAD)
         if (savedInstanceState == null && payload != null) {
-            // After the dialog is shown, so a valid payload can dismiss it.
+            // After the dialog is shown: a valid payload opens the confirmation.
             binding.root.post { if (isAdded) handlePayload(payload) }
         }
 
@@ -74,29 +74,27 @@ class FirstStartDialogFragment : DialogFragment() {
         result.contents?.let { handlePayload(it) }
     }
 
-    /** QR scan and deep link: payload v1, docs/design/ux/07-delivery.md §3.2. */
+    /**
+     * QR scan and deep link: payload v1, docs/design/ux/07-delivery.md §3.2.
+     * The payload comes from outside the app, so it never registers by itself:
+     * LinkFlow returns a confirmation that the keeper must accept first.
+     */
     private fun handlePayload(raw: String) {
-        val result = LinkPayload.parse(
-            raw,
-            gatewaySettings.serverUrl,
-            System.currentTimeMillis() / 1000
-        )
-        when (result) {
-            is LinkPayload.Result.Ok -> {
-                setFragmentResult(
-                    REQUEST_KEY,
-                    Bundle().apply {
-                        putString(KEY_RESULT_CODE, Result.SignInByCode.name)
-                        putString(KEY_CODE, result.code)
-                        putString(KEY_LABEL, result.label)
-                    }
-                )
-                dismiss()
-            }
+        val serverUrl = gatewaySettings.serverUrl
+        val result = LinkPayload.parse(raw, serverUrl, System.currentTimeMillis() / 1000)
+        applyStep(LinkFlow.onPayload(result, serverUrl))
+    }
 
-            is LinkPayload.Result.Failed -> {
+    private fun actionSignInByCode() {
+        applyStep(LinkFlow.onManualCode(binding.editCode.text.toString()))
+    }
+
+    private fun applyStep(step: LinkFlow.Step) {
+        _binding?.editCodeLayout?.error = null
+        when (step) {
+            is LinkFlow.Step.ShowError -> {
                 _binding?.editCodeLayout?.error = getString(
-                    when (result.error) {
+                    when (step.error) {
                         LinkPayload.Error.Invalid -> R.string.link_invalid_payload
                         LinkPayload.Error.UnsupportedVersion -> R.string.link_unsupported_version
                         LinkPayload.Error.ForbiddenServer -> R.string.link_forbidden_server
@@ -104,27 +102,44 @@ class FirstStartDialogFragment : DialogFragment() {
                     }
                 )
             }
+
+            LinkFlow.Step.CodeRequired -> {
+                _binding?.editCodeLayout?.error = getString(R.string.first_run_code_required)
+            }
+
+            is LinkFlow.Step.Confirm -> confirm(step)
+
+            is LinkFlow.Step.Register -> {
+                setFragmentResult(
+                    REQUEST_KEY,
+                    Bundle().apply {
+                        putString(KEY_RESULT_CODE, Result.SignInByCode.name)
+                        putString(KEY_CODE, step.code)
+                        putString(KEY_LABEL, step.label)
+                    }
+                )
+                dismiss()
+            }
         }
     }
 
-    private fun actionSignInByCode() {
-        val code = LoginCodeSanitizer.clean(binding.editCode.text.toString())
-
-        binding.editCodeLayout.error = null
-
-        if (code.isEmpty()) {
-            binding.editCodeLayout.error = getString(R.string.first_run_code_required)
-            return
+    // "Link this phone to {t}?" with the server host; the label is untrusted
+    // and already sanitised and capped by LinkFlow.displayLabel.
+    private fun confirm(step: LinkFlow.Step.Confirm) {
+        val title = if (step.label == null) {
+            getString(R.string.link_confirm_title_no_label)
+        } else {
+            getString(R.string.link_confirm_title, step.label)
         }
-
-        setFragmentResult(
-            REQUEST_KEY,
-            Bundle().apply {
-                putString(KEY_RESULT_CODE, Result.SignInByCode.name)
-                putString(KEY_CODE, code)
+        AlertDialog.Builder(requireContext())
+            .setTitle(title)
+            .setMessage(getString(R.string.link_confirm_server, step.host))
+            .setCancelable(true)
+            .setPositiveButton(R.string.btn_continue) { _, _ ->
+                if (isAdded) applyStep(LinkFlow.onConfirm(step))
             }
-        )
-        dismiss()
+            .setNegativeButton(R.string.cancel, null)
+            .show()
     }
 
     private fun actionCancel() {

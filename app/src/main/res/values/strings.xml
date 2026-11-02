@@ -236,4 +236,7 @@
     <string name="link_forbidden_server">This code is for a server Mnaseb SIM does not use</string>
     <string name="link_code_expired">This code has expired; ask for a new one</string>
     <string name="link_already_linked">This phone is already linked</string>
+    <string name="link_confirm_title">Link this phone to %1$s?</string>
+    <string name="link_confirm_title_no_label">Link this phone?</string>
+    <string name="link_confirm_server">Server: %1$s\nContinue only if this code comes from your own Mnaseb workspace.</string>
 </resources>

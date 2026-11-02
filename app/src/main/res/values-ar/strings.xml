@@ -216,4 +216,7 @@
     <string name="link_forbidden_server">هذا الرمز لخادم لا يستخدمه Mnaseb SIM</string>
     <string name="link_code_expired">انتهت صلاحية هذا الرمز؛ اطلب رمزاً جديداً</string>
     <string name="link_already_linked">هذا الهاتف مربوط بالفعل</string>
+    <string name="link_confirm_title">ربط هذا الهاتف بـ %1$s؟</string>
+    <string name="link_confirm_title_no_label">ربط هذا الهاتف؟</string>
+    <string name="link_confirm_server">الخادم: %1$s\nتابع فقط إذا كان هذا الرمز من مساحة عملك في مناسب.</string>
 </resources>

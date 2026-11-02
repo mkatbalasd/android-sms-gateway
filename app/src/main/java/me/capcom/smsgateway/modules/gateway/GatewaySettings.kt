@@ -39,8 +39,10 @@ class GatewaySettings(
         registrationInfo = registrationInfo?.copy(password = null)
     }
 
+    // Mnaseb SIM: the server is fixed to the Mnaseb private server (decision
+    // 0008). A stored cloud_url (old settings screen or remote import) is ignored.
     val serverUrl: String
-        get() = storage.get<String?>(CLOUD_URL) ?: PUBLIC_URL
+        get() = PUBLIC_URL
     val privateToken: String?
         get() = storage.get<String>(PRIVATE_TOKEN)
 
@@ -71,27 +73,9 @@ class GatewaySettings(
     override fun import(data: Map<String, *>): Boolean {
         return data.map {
             when (it.key) {
-                CLOUD_URL -> {
-                    val url = it.value?.toString() ?: PUBLIC_URL
-                    if (url != null && !url.startsWith("https://")) {
-                        throw IllegalArgumentException("url must start with https://")
-                    }
-
-                    val changed = serverUrl != url
-
-                    storage.set(it.key, url)
-
-                    changed
-                }
-
-                PRIVATE_TOKEN -> {
-                    val newValue = it.value?.toString()
-                    val changed = privateToken != newValue
-
-                    storage.set(it.key, newValue)
-
-                    changed
-                }
+                // Mnaseb SIM (decision 0008): a remote settings import must never
+                // re-point the server or replace the token it is reached with.
+                CLOUD_URL, PRIVATE_TOKEN -> false
 
                 NOTIFICATION_CHANNEL -> {
                     val newValue = it.value?.let { NotificationChannel.valueOf(it.toString()) }

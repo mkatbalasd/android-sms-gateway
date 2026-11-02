@@ -21,7 +21,7 @@ internal class LinkPayloadTest {
         assertEquals(
             LinkPayload.Result.Ok(
                 "7wr3bd",
-                "مركز الشفاء",
+                cp(0x0645, 0x0631, 0x0643, 0x0632, 0x20, 0x0627, 0x0644, 0x0634, 0x0641, 0x0627, 0x0621),
                 1793664000L
             ),
             parse(raw)
@@ -48,7 +48,7 @@ internal class LinkPayloadTest {
     fun formatCharactersAroundAndInsideTheCodeAreRemoved() {
         assertEquals(
             LinkPayload.Result.Ok("7wr3bd", null, null),
-            parse("‫ mnaseb-sim://link?v=1&s=$encodedServer&c=%E2%80%AC7wr3bd%E2%81%A9‬ ")
+            parse("${cp(0x202B)} mnaseb-sim://link?v=1&s=$encodedServer&c=%E2%80%AC7wr3bd%E2%81%A9${cp(0x202C)} ")
         )
     }
 
