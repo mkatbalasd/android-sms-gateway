@@ -32,7 +32,10 @@
             android:gravity="center"
             android:orientation="vertical">
 
+            <!-- Mnaseb SIM: the local server is not offered; hidden in code too. -->
             <com.google.android.material.card.MaterialCardView
+                android:id="@+id/cardLocalServer"
+                android:visibility="gone"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_margin="4dp"

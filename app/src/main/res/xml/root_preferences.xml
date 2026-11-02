@@ -5,7 +5,9 @@
         app:icon="@drawable/ic_encryption"
         app:summary="@string/device_keys_management"
         app:title="@string/device_dotdotdot" />
+    <!-- Mnaseb SIM: the local server is not offered (no Local-vs-Cloud choice). -->
     <Preference
+        app:isPreferenceVisible="false"
         android:icon="@drawable/ic_local_server"
         app:fragment="me.capcom.smsgateway.ui.settings.LocalServerSettingsFragment"
         app:summary="@string/port_credentials_etc"

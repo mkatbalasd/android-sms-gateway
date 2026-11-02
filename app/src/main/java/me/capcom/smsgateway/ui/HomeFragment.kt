@@ -27,6 +27,8 @@ import androidx.fragment.app.Fragment
 import androidx.fragment.app.setFragmentResultListener
 import androidx.lifecycle.MediatorLiveData
 import androidx.lifecycle.lifecycleScope
+import io.ktor.client.plugins.ClientRequestException
+import io.ktor.http.HttpStatusCode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import me.capcom.smsgateway.R
@@ -66,43 +68,63 @@ class HomeFragment : Fragment() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        pendingCode = savedInstanceState?.getString(STATE_PENDING_CODE)
+        pendingLabel = savedInstanceState?.getString(STATE_PENDING_LABEL)
+
+        // Mnaseb SIM: the first-run dialog only links by one-time code; the
+        // upstream Sign Up (anonymous) and Sign In (credentials) results are gone.
         setFragmentResultListener(FirstStartDialogFragment.REQUEST_KEY) { _, data ->
             when (FirstStartDialogFragment.getResult(data)) {
                 FirstStartDialogFragment.Result.Canceled -> {
                     Toast.makeText(
                         requireContext(),
-                        "Operation cancelled",
+                        R.string.first_run_cancelled,
                         Toast.LENGTH_SHORT
                     )
                         .show()
                     return@setFragmentResultListener
                 }
 
-                FirstStartDialogFragment.Result.SignUp -> {
-                    registerAndStart(GatewayService.RegistrationMode.Anonymous)
-                }
-
-                FirstStartDialogFragment.Result.SignIn -> {
-                    registerAndStart(
-                        GatewayService.RegistrationMode.WithCredentials(
-                            FirstStartDialogFragment.getUsername(data),
-                            FirstStartDialogFragment.getPassword(data),
-                        )
-                    )
-                }
-
                 FirstStartDialogFragment.Result.SignInByCode -> {
-                    registerAndStart(
-                        GatewayService.RegistrationMode.WithCode(
-                            FirstStartDialogFragment.getCode(data)
-                        )
+                    linkWithCode(
+                        FirstStartDialogFragment.getCode(data),
+                        FirstStartDialogFragment.getLabel(data),
                     )
                 }
             }
         }
     }
 
-    private fun registerAndStart(mode: GatewayService.RegistrationMode) {
+    /**
+     * Mnaseb SIM first run: permissions first, so the first registration already
+     * carries the SIM cards; then register with the code; then start on boot.
+     */
+    private fun linkWithCode(code: String, label: String?) {
+        pendingCode = code
+        pendingLabel = label
+        requestPermissionsThen { runPendingLink() }
+    }
+
+    // The link waiting for the permission prompt; kept in saved state so a
+    // rotation or process restart during the prompt does not drop it.
+    private var pendingCode: String? = null
+    private var pendingLabel: String? = null
+
+    private fun runPendingLink() {
+        val code = pendingCode ?: return
+        val label = pendingLabel
+        pendingCode = null
+        pendingLabel = null
+        registerAndStart(GatewayService.RegistrationMode.WithCode(code), label)
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(STATE_PENDING_CODE, pendingCode)
+        outState.putString(STATE_PENDING_LABEL, pendingLabel)
+    }
+
+    private fun registerAndStart(mode: GatewayService.RegistrationMode, label: String?) {
         // Each registration creates a separate account and device, and the last response
         // wins, so a second request must not start while one is still in flight.
         if (registrationInFlight) {
@@ -122,7 +144,11 @@ class HomeFragment : Fragment() {
                     null,
                     mode
                 )
-                requestPermissionsAndStart()
+                // Mnaseb SIM: start on boot is turned on by the first run.
+                settingsHelper.autostart = true
+                _binding?.switchAutostart?.isChecked = true
+                showLinked(label)
+                start()
             } catch (e: CancellationException) {
                 // Lifecycle cancellation, not a registration failure: keep it propagating
                 // instead of reporting it as an error.
@@ -131,9 +157,15 @@ class HomeFragment : Fragment() {
                 // `context` rather than `requireContext()`: the fragment may already be
                 // detached, and requiring a context here would throw outside the handler.
                 val ctx = context ?: return@launch
+                val status = (e as? ClientRequestException)?.response?.status
+                val text = when (status) {
+                    HttpStatusCode.Unauthorized -> ctx.getString(R.string.link_code_refused)
+                    HttpStatusCode.TooManyRequests -> ctx.getString(R.string.link_too_many_attempts)
+                    else -> ctx.getString(R.string.failed_to_register_device, e.message)
+                }
                 Toast.makeText(
                     ctx,
-                    "Failed to register device: ${e.message}",
+                    text,
                     Toast.LENGTH_LONG
                 ).show()
             } finally {
@@ -141,6 +173,20 @@ class HomeFragment : Fragment() {
                 setStartEnabled(true)
             }
         }
+    }
+
+    private fun showLinked(label: String?) {
+        val ctx = context ?: return
+        val title = if (label.isNullOrEmpty()) {
+            ctx.getString(R.string.linked)
+        } else {
+            ctx.getString(R.string.linked_to, label)
+        }
+        androidx.appcompat.app.AlertDialog.Builder(ctx)
+            .setTitle(title)
+            .setMessage(R.string.linked_start_on_boot_on)
+            .setPositiveButton(android.R.string.ok, null)
+            .show()
     }
 
     private fun setStartEnabled(enabled: Boolean) {
@@ -164,6 +210,14 @@ class HomeFragment : Fragment() {
         binding.textLocalPassword.movementMethod = LinkMovementMethod.getInstance()
         binding.textLocalDeviceId.movementMethod = LinkMovementMethod.getInstance()
         binding.textRemoteDeviceId.movementMethod = LinkMovementMethod.getInstance()
+
+        // Mnaseb SIM: no Local-vs-Cloud choice. The phone always uses the fixed
+        // Mnaseb server (decision 0008); the local server is off and its card and
+        // both switches are hidden.
+        gatewaySettings.enabled = true
+        localServerSettings.enabled = false
+        binding.cardLocalServer.isVisible = false
+        binding.switchUseRemoteServer.isVisible = false
 
         binding.switchAutostart.isChecked = settingsHelper.autostart
 
@@ -196,6 +250,11 @@ class HomeFragment : Fragment() {
 //        if (settingsHelper.autostart) {
 //            actionStart(true)
 //        }
+
+        // Mnaseb SIM: an unlinked phone opens on the first-run screen.
+        if (savedInstanceState == null && gatewaySettings.registrationInfo == null) {
+            cloudFirstStart()
+        }
 
         viewLifecycleOwner.lifecycleScope.launch {
             events.collect<DeviceRegisteredEvent.Success> { event ->
@@ -391,8 +450,9 @@ class HomeFragment : Fragment() {
     }
 
     private fun cloudFirstStart() {
+        if (parentFragmentManager.findFragmentByTag(FirstStartDialogFragment.TAG) != null) return
         FirstStartDialogFragment.newInstance()
-            .show(parentFragmentManager, "signin")
+            .show(parentFragmentManager, FirstStartDialogFragment.TAG)
     }
 
     private fun stop() {
@@ -404,6 +464,13 @@ class HomeFragment : Fragment() {
     }
 
     private fun requestPermissionsAndStart() {
+        requestPermissionsThen { start() }
+    }
+
+    // Runs once the permission prompt returns (granted or not).
+    private var afterPermissions: (() -> Unit)? = null
+
+    private fun requestPermissionsThen(then: () -> Unit) {
         val permissionsRequired =
             listOf(
                 Manifest.permission.READ_PHONE_STATE,
@@ -412,6 +479,8 @@ class HomeFragment : Fragment() {
                 Manifest.permission.SEND_SMS,
                 Manifest.permission.RECEIVE_MMS,
                 Manifest.permission.READ_PHONE_NUMBERS.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },
+                // Mnaseb SIM: the foreground notification must be visible on 13+.
+                Manifest.permission.POST_NOTIFICATIONS.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },
             )
                 .filterNotNull()
                 .filter {
@@ -422,10 +491,11 @@ class HomeFragment : Fragment() {
                 }
 
         if (permissionsRequired.isEmpty()) {
-            start()
+            then()
             return
         }
 
+        afterPermissions = then
         permissionsRequest.launch(permissionsRequired.toTypedArray())
     }
 
@@ -457,7 +527,11 @@ class HomeFragment : Fragment() {
                 .show()
         }
 
-        start()
+        // After a recreation the lambda is gone; a restored pending link wins.
+        val then = afterPermissions
+            ?: if (pendingCode != null) ({ runPendingLink() }) else ({ start() })
+        afterPermissions = null
+        then()
     }
 
     private val stateLiveData by lazy {
@@ -486,6 +560,9 @@ class HomeFragment : Fragment() {
     }
 
     companion object {
+        private const val STATE_PENDING_CODE = "mnaseb.pending_code"
+        private const val STATE_PENDING_LABEL = "mnaseb.pending_label"
+
         @JvmStatic
         fun newInstance() =
             HomeFragment()

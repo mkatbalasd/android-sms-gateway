@@ -11,6 +11,7 @@ import me.capcom.smsgateway.modules.encryption.encryptionModule
 import me.capcom.smsgateway.modules.events.eventBusModule
 import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.incoming.incomingModule
+import me.capcom.smsgateway.modules.localserver.LocalServerSettings
 import me.capcom.smsgateway.modules.localserver.localserverModule
 import me.capcom.smsgateway.modules.logs.logsModule
 import me.capcom.smsgateway.modules.messages.messagesModule
@@ -72,6 +73,10 @@ class App: Application() {
         instance = this
 
         EventsReceiver.register(this)
+
+        // Mnaseb SIM: no local server, ever. Clear an old v0.1 flag before the
+        // orchestrator starts, so a boot before the UI opens cannot start it.
+        get<LocalServerSettings>().enabled = false
 
         get<OrchestratorService>().start(this, true)
     }

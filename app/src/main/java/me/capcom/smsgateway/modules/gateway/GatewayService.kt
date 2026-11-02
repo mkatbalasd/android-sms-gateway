@@ -148,7 +148,11 @@ class GatewayService(
             )
             val response = when (registerMode) {
                 RegistrationMode.Anonymous -> api.deviceRegister(request, null)
-                is RegistrationMode.WithCode -> api.deviceRegister(request, registerMode.code)
+                // Mnaseb SIM: the single choke point for every code entry path.
+                is RegistrationMode.WithCode -> api.deviceRegister(
+                    request,
+                    LoginCodeSanitizer.clean(registerMode.code)
+                )
                 is RegistrationMode.WithCredentials -> api.deviceRegister(
                     request,
                     registerMode.login to registerMode.password
