@@ -197,4 +197,15 @@
     <string name="webhook_queue_label_payload">الحمولة</string>
     <string name="webhook_queue_payload_unavailable">الحمولة غير متاحة</string>
     <string name="webhook_queue_no_error">لا يوجد</string>
+    <!-- Mnaseb SIM first run (S1a) -->
+    <string name="first_run_title">اربط هذا الهاتف بمساحة عملك في مناسب</string>
+    <string name="first_run_enter_code">أدخل الرمز الظاهر في مساحة العمل</string>
+    <string name="first_run_code_required">أدخل الرمز</string>
+    <string name="first_run_permissions_note">سيطلب Mnaseb SIM بعد ذلك أذونات الرسائل والهاتف والإشعارات اللازمة لإرسال رسائلكم.</string>
+    <string name="first_run_cancelled">أُلغي الربط</string>
+    <string name="linked">تم الربط</string>
+    <string name="linked_to">تم الربط بـ %1$s</string>
+    <string name="linked_start_on_boot_on">تم تفعيل بدء التشغيل عند الإقلاع: يعمل Mnaseb SIM تلقائياً بعد إعادة تشغيل الهاتف.</string>
+    <string name="link_code_refused">هذا الرمز استُخدم من قبل أو انتهت صلاحيته؛ اطلب رمزاً جديداً</string>
+    <string name="link_too_many_attempts">محاولات كثيرة؛ انتظر بضع دقائق ثم أعد المحاولة</string>
 </resources>

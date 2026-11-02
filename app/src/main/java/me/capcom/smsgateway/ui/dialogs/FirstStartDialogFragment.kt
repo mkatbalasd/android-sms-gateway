@@ -3,14 +3,17 @@ package me.capcom.smsgateway.ui.dialogs
 import android.app.Dialog
 import android.os.Bundle
 import androidx.appcompat.app.AlertDialog
-import androidx.core.view.isVisible
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.setFragmentResult
-import com.google.android.material.tabs.TabLayout
-import com.google.android.material.tabs.TabLayout.OnTabSelectedListener
+import me.capcom.smsgateway.R
 import me.capcom.smsgateway.databinding.DialogFirstStartBinding
 import me.capcom.smsgateway.modules.gateway.LoginCodeSanitizer
 
+/**
+ * Mnaseb SIM first run: the phone links to the tenant's account on the fixed
+ * Mnaseb server with a one-time code. The upstream Sign Up and Sign In
+ * (username/password) tabs are removed, so neither is reachable.
+ */
 class FirstStartDialogFragment : DialogFragment() {
 
     private var _binding: DialogFirstStartBinding? = null
@@ -18,46 +21,12 @@ class FirstStartDialogFragment : DialogFragment() {
     // This property is only valid between onCreateDialog and
     // onDestroyView.
     private val binding get() = _binding!!
-    
+
     override fun onCreateDialog(savedInstanceState: Bundle?): Dialog {
         _binding = DialogFirstStartBinding.inflate(layoutInflater)
 
-        binding.tabLayout.addOnTabSelectedListener(object : OnTabSelectedListener {
-            override fun onTabSelected(tab: TabLayout.Tab) {
-                when (tab.position) {
-                    POSITION_SIGNUP -> {
-                        binding.layoutSignUp.isVisible = true
-                        binding.layoutSignIn.isVisible = false
-                        binding.layoutSignInByCode.isVisible = false
-                    }
-
-                    POSITION_SIGNIN -> {
-                        binding.layoutSignUp.isVisible = false
-                        binding.layoutSignIn.isVisible = true
-                        binding.layoutSignInByCode.isVisible = false
-                    }
-
-                    POSITION_SIGNIN_BY_CODE -> {
-                        binding.layoutSignUp.isVisible = false
-                        binding.layoutSignIn.isVisible = false
-                        binding.layoutSignInByCode.isVisible = true
-                    }
-                }
-            }
-
-            override fun onTabUnselected(tab: TabLayout.Tab?) {
-            }
-
-            override fun onTabReselected(tab: TabLayout.Tab?) {
-            }
-        })
-
         binding.buttonContinue.setOnClickListener {
-            when (binding.tabLayout.selectedTabPosition) {
-                POSITION_SIGNUP -> actionSignUp()
-                POSITION_SIGNIN -> actionSignIn()
-                POSITION_SIGNIN_BY_CODE -> actionSignInByCode()
-            }
+            actionSignInByCode()
         }
 
         binding.buttonCancel.setOnClickListener {
@@ -77,51 +46,13 @@ class FirstStartDialogFragment : DialogFragment() {
         super.onDestroyView()
     }
 
-    private fun actionSignUp() {
-        setFragmentResult(
-            REQUEST_KEY,
-            Bundle().apply {
-                putString(KEY_RESULT_CODE, Result.SignUp.name)
-            }
-        )
-        dismiss()
-    }
-
-    private fun actionSignIn() {
-        val username = binding.editUsername.text.toString()
-        val password = binding.editPassword.text.toString()
-
-        binding.editUsernameLayout.error = null
-        binding.editPasswordLayout.error = null
-
-        if (username.isEmpty()) {
-            binding.editUsernameLayout.error = "Required"
-            return
-        }
-
-        if (password.isEmpty()) {
-            binding.editPasswordLayout.error = "Required"
-            return
-        }
-
-        setFragmentResult(
-            REQUEST_KEY,
-            Bundle().apply {
-                putString(KEY_RESULT_CODE, Result.SignIn.name)
-                putString(KEY_USERNAME, username)
-                putString(KEY_PASSWORD, password)
-            }
-        )
-        dismiss()
-    }
-
     private fun actionSignInByCode() {
         val code = LoginCodeSanitizer.clean(binding.editCode.text.toString())
 
         binding.editCodeLayout.error = null
 
         if (code.isEmpty()) {
-            binding.editCodeLayout.error = "Required"
+            binding.editCodeLayout.error = getString(R.string.first_run_code_required)
             return
         }
 
@@ -147,31 +78,25 @@ class FirstStartDialogFragment : DialogFragment() {
 
     enum class Result {
         Canceled,
-        SignUp,
-        SignIn,
         SignInByCode,
     }
 
     companion object {
         const val REQUEST_KEY = "FirstStartDialogFragment"
-
-        private const val POSITION_SIGNUP = 0
-        private const val POSITION_SIGNIN = 1
-        private const val POSITION_SIGNIN_BY_CODE = 2
+        const val TAG = "signin"
 
         private const val KEY_RESULT_CODE = "result_code"
-        private const val KEY_USERNAME = "username"
-        private const val KEY_PASSWORD = "password"
         private const val KEY_CODE = "code"
+        private const val KEY_LABEL = "label"
 
         fun newInstance(): FirstStartDialogFragment = FirstStartDialogFragment()
 
         fun getResult(data: Bundle): Result =
             Result.valueOf(data.getString(KEY_RESULT_CODE) ?: Result.Canceled.name)
 
-        fun getUsername(data: Bundle): String = requireNotNull(data.getString(KEY_USERNAME))
-        fun getPassword(data: Bundle): String = requireNotNull(data.getString(KEY_PASSWORD))
-
         fun getCode(data: Bundle): String = requireNotNull(data.getString(KEY_CODE))
+
+        /** Tenant label for "Linked to {t}"; only a QR payload carries one. */
+        fun getLabel(data: Bundle): String? = data.getString(KEY_LABEL)
     }
 }
