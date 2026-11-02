@@ -9,6 +9,7 @@ import androidx.fragment.app.setFragmentResult
 import com.google.android.material.tabs.TabLayout
 import com.google.android.material.tabs.TabLayout.OnTabSelectedListener
 import me.capcom.smsgateway.databinding.DialogFirstStartBinding
+import me.capcom.smsgateway.modules.gateway.LoginCodeSanitizer
 
 class FirstStartDialogFragment : DialogFragment() {
 
@@ -115,7 +116,7 @@ class FirstStartDialogFragment : DialogFragment() {
     }
 
     private fun actionSignInByCode() {
-        val code = binding.editCode.text.toString()
+        val code = LoginCodeSanitizer.clean(binding.editCode.text.toString())
 
         binding.editCodeLayout.error = null
 
