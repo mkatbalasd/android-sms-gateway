@@ -228,4 +228,12 @@
     <string name="linked_start_on_boot_on">Start on boot is on: Mnaseb SIM starts again by itself when the phone restarts.</string>
     <string name="link_code_refused">This code was already used or has expired; ask for a new one</string>
     <string name="link_too_many_attempts">Too many attempts; wait a few minutes and try again</string>
+    <string name="first_run_scan">Scan the code shown in your workspace</string>
+    <string name="first_run_scan_prompt">Point the camera at the QR code in your Mnaseb workspace</string>
+    <string name="first_run_or">or enter the code instead</string>
+    <string name="link_invalid_payload">This is not a Mnaseb SIM link code</string>
+    <string name="link_unsupported_version">Update Mnaseb SIM to use this code</string>
+    <string name="link_forbidden_server">This code is for a server Mnaseb SIM does not use</string>
+    <string name="link_code_expired">This code has expired; ask for a new one</string>
+    <string name="link_already_linked">This phone is already linked</string>
 </resources>

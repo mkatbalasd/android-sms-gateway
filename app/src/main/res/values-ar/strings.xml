@@ -208,4 +208,12 @@
     <string name="linked_start_on_boot_on">تم تفعيل بدء التشغيل عند الإقلاع: يعمل Mnaseb SIM تلقائياً بعد إعادة تشغيل الهاتف.</string>
     <string name="link_code_refused">هذا الرمز استُخدم من قبل أو انتهت صلاحيته؛ اطلب رمزاً جديداً</string>
     <string name="link_too_many_attempts">محاولات كثيرة؛ انتظر بضع دقائق ثم أعد المحاولة</string>
+    <string name="first_run_scan">امسح الرمز الظاهر في مساحة العمل</string>
+    <string name="first_run_scan_prompt">وجّه الكاميرا إلى رمز QR في مساحة عمل مناسب</string>
+    <string name="first_run_or">أو أدخل الرمز بدلاً من ذلك</string>
+    <string name="link_invalid_payload">هذا ليس رمز ربط لتطبيق Mnaseb SIM</string>
+    <string name="link_unsupported_version">حدّث Mnaseb SIM لاستخدام هذا الرمز</string>
+    <string name="link_forbidden_server">هذا الرمز لخادم لا يستخدمه Mnaseb SIM</string>
+    <string name="link_code_expired">انتهت صلاحية هذا الرمز؛ اطلب رمزاً جديداً</string>
+    <string name="link_already_linked">هذا الهاتف مربوط بالفعل</string>
 </resources>
