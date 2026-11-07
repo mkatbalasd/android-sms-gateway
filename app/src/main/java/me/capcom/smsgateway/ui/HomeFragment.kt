@@ -33,6 +33,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.databinding.FragmentHomeBinding
+import me.capcom.smsgateway.helpers.KeepAliveGuideState
 import me.capcom.smsgateway.helpers.SettingsHelper
 import me.capcom.smsgateway.modules.connection.ConnectionService
 import me.capcom.smsgateway.modules.events.EventBus
@@ -44,6 +45,7 @@ import me.capcom.smsgateway.modules.localserver.LocalServerSettings
 import me.capcom.smsgateway.modules.localserver.events.IPReceivedEvent
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
 import me.capcom.smsgateway.ui.dialogs.FirstStartDialogFragment
+import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
 import org.koin.android.ext.android.inject
 
 class HomeFragment : Fragment() {
@@ -186,6 +188,8 @@ class HomeFragment : Fragment() {
             .setTitle(title)
             .setMessage(R.string.linked_start_on_boot_on)
             .setPositiveButton(android.R.string.ok, null)
+            // Mnaseb SIM: after the link, show the keep-alive guide once.
+            .setOnDismissListener { showKeepAliveGuide(onlyOnce = true) }
             .show()
     }
 
@@ -250,6 +254,21 @@ class HomeFragment : Fragment() {
 //        if (settingsHelper.autostart) {
 //            actionStart(true)
 //        }
+
+        binding.buttonKeepAlive.setOnClickListener { showKeepAliveGuide(onlyOnce = false) }
+
+        // Mnaseb SIM: a linked phone is offered the keep-alive guide again at app
+        // start while a row is still not set (it never blocks sending).
+        if (savedInstanceState == null && gatewaySettings.registrationInfo != null) {
+            val ctx = requireContext()
+            if (KeepAliveGuideState.shouldOfferOnStart(
+                    KeepAliveGuideDialogFragment.wasShown(ctx),
+                    KeepAliveGuideDialogFragment.currentState(ctx, settingsHelper)
+                )
+            ) {
+                showKeepAliveGuide(onlyOnce = false)
+            }
+        }
 
         // Mnaseb SIM: an unlinked phone opens on the first-run screen.
         if (savedInstanceState == null && gatewaySettings.registrationInfo == null) {
@@ -447,6 +466,15 @@ class HomeFragment : Fragment() {
         } else {
             stop()
         }
+    }
+
+    private fun showKeepAliveGuide(onlyOnce: Boolean) {
+        val ctx = context ?: return
+        if (!isAdded || parentFragmentManager.isStateSaved) return
+        if (onlyOnce && KeepAliveGuideDialogFragment.wasShown(ctx)) return
+        if (parentFragmentManager.findFragmentByTag(KeepAliveGuideDialogFragment.TAG) != null) return
+        KeepAliveGuideDialogFragment.newInstance()
+            .show(parentFragmentManager, KeepAliveGuideDialogFragment.TAG)
     }
 
     private fun cloudFirstStart() {
