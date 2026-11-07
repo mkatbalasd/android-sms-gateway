@@ -95,7 +95,8 @@ object OemAutostart {
         for (component in candidates(manufacturer)) {
             val intent = Intent().setComponent(component).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             try {
-                if (intent.resolveActivity(context.packageManager) == null) continue
+                // No resolveActivity check: on Android 11+ package visibility hides OEM
+                // packages from it, while an explicit-component start still works.
                 context.startActivity(intent)
                 return Opened.OEM_SCREEN
             } catch (e: ActivityNotFoundException) {
