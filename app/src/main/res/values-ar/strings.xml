@@ -219,4 +219,35 @@
     <string name="link_confirm_title">ربط هذا الهاتف بـ %1$s؟</string>
     <string name="link_confirm_title_no_label">ربط هذا الهاتف؟</string>
     <string name="link_confirm_server">الخادم: %1$s\nتابع فقط إذا كان هذا الرمز من مساحة عملك في مناسب.</string>
+    <!-- Keep-alive guide (CARD-13) -->
+    <string name="keep_alive_home_button">إبقاء التطبيق يعمل</string>
+    <string name="keep_alive_title">إبقاء التطبيق يعمل</string>
+    <string name="keep_alive_intro">ثلاثة إعدادات تمنع الهاتف من إغلاق هذا التطبيق. يمكنك إغلاق هذه الشاشة في أي وقت، ولا يتوقف الإرسال بسببها.</string>
+    <string name="keep_alive_row_battery">١. البطارية: لا تقيّد هذا التطبيق</string>
+    <string name="keep_alive_battery_action">السماح من إعدادات البطارية</string>
+    <string name="keep_alive_row_boot">٢. التشغيل عند إقلاع الهاتف</string>
+    <string name="keep_alive_row_oem">٣. السماح للتطبيق بالبدء والعمل في الخلفية (%1$s)</string>
+    <string name="keep_alive_status_on">الحالة: مفعّل</string>
+    <string name="keep_alive_status_off">الحالة: غير مفعّل</string>
+    <string name="keep_alive_status_unknown">الحالة: غير معروف</string>
+    <string name="keep_alive_open_settings">فتح الإعدادات</string>
+    <string name="keep_alive_i_did_this">قمت بذلك</string>
+    <string name="keep_alive_close">إغلاق</string>
+    <string name="keep_alive_all_set">كل شيء جاهز. يجب أن يبقى التطبيق يعمل.</string>
+    <string name="keep_alive_opened_oem">تم فتح شاشة إعدادات الشركة المصنّعة للهاتف.</string>
+    <string name="keep_alive_opened_app_info">شاشة هذا الهاتف الخاصة غير متاحة، فتم فتح صفحة معلومات التطبيق. ابحث عن البطارية أو التشغيل.</string>
+    <string name="keep_alive_opened_none">تعذّر فتح شاشة الإعدادات. افتح الإعدادات ثم التطبيقات ثم Mnaseb SIM.</string>
+    <string name="keep_alive_maker_huawei">هواوي / هونر</string>
+    <string name="keep_alive_maker_xiaomi">شاومي</string>
+    <string name="keep_alive_maker_samsung">سامسونج</string>
+    <string name="keep_alive_maker_oppo">أوبو / ريلمي</string>
+    <string name="keep_alive_maker_vivo">فيفو</string>
+    <string name="keep_alive_maker_oneplus">ون بلس</string>
+    <string name="keep_alive_maker_other">هاتفك</string>
+    <string name="keep_alive_steps_huawei">الإعدادات ← التطبيقات ← Mnaseb SIM ← البطارية ← تشغيل التطبيق. أوقف «إدارة تلقائية» ثم فعّل «التشغيل التلقائي» و«التشغيل الثانوي» و«التشغيل في الخلفية».</string>
+    <string name="keep_alive_steps_xiaomi">الإعدادات ← التطبيقات ← إدارة التطبيقات ← Mnaseb SIM. فعّل «التشغيل التلقائي» واجعل «توفير البطارية» على «بلا قيود».</string>
+    <string name="keep_alive_steps_samsung">الإعدادات ← البطارية ← حدود الاستخدام في الخلفية. أزل Mnaseb SIM من قائمتي التطبيقات النائمة والنائمة بعمق، وأضفه إلى «التطبيقات التي لا تنام أبداً».</string>
+    <string name="keep_alive_steps_generic">افتح الإعدادات ← التطبيقات ← Mnaseb SIM ← البطارية. اسمح بالنشاط في الخلفية وبالتشغيل التلقائي، ولا تدع الهاتف يحسّن أو يقيّد هذا التطبيق.</string>
+    <string name="keep_alive_restricted_note">إذا ثُبّت التطبيق من ملف (وليس من متجر) وكان أندرويد 13 أو أحدث يعطّل أحد الإعدادات: الإعدادات ← التطبيقات ← Mnaseb SIM ← قائمة النقاط الثلاث ← السماح بالإعدادات المقيّدة.</string>
+    <string name="keep_alive_restart_rule">بعد إعادة تشغيل الهاتف افتح التطبيق مرة واحدة.</string>
 </resources>

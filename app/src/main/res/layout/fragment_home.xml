@@ -250,6 +250,14 @@
         android:layout_margin="8dp"
         android:text="@string/settings_start_on_boot" />
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/buttonKeepAlive"
+        style="?attr/borderlessButtonStyle"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="8dp"
+        android:text="@string/keep_alive_home_button" />
+
     <Space
         android:layout_width="match_parent"
         android:layout_height="8dp" />

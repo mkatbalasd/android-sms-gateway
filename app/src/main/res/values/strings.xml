@@ -239,4 +239,35 @@
     <string name="link_confirm_title">Link this phone to %1$s?</string>
     <string name="link_confirm_title_no_label">Link this phone?</string>
     <string name="link_confirm_server">Server: %1$s\nContinue only if this code comes from your own Mnaseb workspace.</string>
+    <!-- Keep-alive guide (CARD-13) -->
+    <string name="keep_alive_home_button">Keep the app running</string>
+    <string name="keep_alive_title">Keep the app running</string>
+    <string name="keep_alive_intro">Three settings stop the phone from closing this app. You can close this screen at any time; sending is never blocked.</string>
+    <string name="keep_alive_row_battery">1. Battery: do not restrict this app</string>
+    <string name="keep_alive_battery_action">Allow in battery settings</string>
+    <string name="keep_alive_row_boot">2. Start on boot</string>
+    <string name="keep_alive_row_oem">3. Allow the app to start and run in the background (%1$s)</string>
+    <string name="keep_alive_status_on">Status: on</string>
+    <string name="keep_alive_status_off">Status: off</string>
+    <string name="keep_alive_status_unknown">Status: unknown</string>
+    <string name="keep_alive_open_settings">Open settings</string>
+    <string name="keep_alive_i_did_this">I did this</string>
+    <string name="keep_alive_close">Close</string>
+    <string name="keep_alive_all_set">All set. The app should keep running.</string>
+    <string name="keep_alive_opened_oem">The settings screen of the phone maker was opened.</string>
+    <string name="keep_alive_opened_app_info">The special screen of this phone is not available, so the app info page was opened. Look for Battery or Launch.</string>
+    <string name="keep_alive_opened_none">Could not open the settings screen. Open Settings, then Apps, then Mnaseb SIM.</string>
+    <string name="keep_alive_maker_huawei">Huawei / Honor</string>
+    <string name="keep_alive_maker_xiaomi">Xiaomi</string>
+    <string name="keep_alive_maker_samsung">Samsung</string>
+    <string name="keep_alive_maker_oppo">Oppo / Realme</string>
+    <string name="keep_alive_maker_vivo">Vivo</string>
+    <string name="keep_alive_maker_oneplus">OnePlus</string>
+    <string name="keep_alive_maker_other">your phone</string>
+    <string name="keep_alive_steps_huawei">Settings, Apps, Mnaseb SIM, Battery, App launch. Turn off Manage automatically, then turn on Auto-launch, Secondary launch and Run in background.</string>
+    <string name="keep_alive_steps_xiaomi">Settings, Apps, Manage apps, Mnaseb SIM. Turn on Autostart and set Battery saver to No restrictions.</string>
+    <string name="keep_alive_steps_samsung">Settings, Battery, Background usage limits. Remove Mnaseb SIM from the sleeping and deep sleeping lists, and add it to Never sleeping apps.</string>
+    <string name="keep_alive_steps_generic">Open Settings, Apps, Mnaseb SIM, Battery. Allow background activity and auto-start, and do not let the phone optimise or restrict this app.</string>
+    <string name="keep_alive_restricted_note">If the app was installed from a file (not from a store) and Android 13 or newer greys a setting out: Settings, Apps, Mnaseb SIM, the three-dot menu, Allow restricted settings.</string>
+    <string name="keep_alive_restart_rule">After a phone restart, open the app once.</string>
 </resources>

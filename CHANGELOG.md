@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Mnaseb SIM: a keep-alive guide after linking (and from a home button) with live battery and start-on-boot status, a Huawei/Xiaomi/Samsung autostart screen shortcut with an app-info fallback, in Arabic and English
+
 ## [v1.78.0] - 2026-10-27
 
 ### Added
