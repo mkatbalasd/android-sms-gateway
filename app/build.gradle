@@ -145,7 +145,13 @@ dependencies {
     // Koin for Android
     implementation "io.insert-koin:koin-android:$koin_version"
 
+    // Mnaseb SIM v0.3.0: the account tokens live in EncryptedSharedPreferences.
+    // 1.1.0-alpha06 is the line that supports minSdk 21 (1.0.0 needs API 23).
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+
     testImplementation("junit:junit:4.13.2")
+    // Mnaseb SIM v0.3.0: Ktor MockEngine for the account API tests.
+    testImplementation("io.ktor:ktor-client-mock:$ktor_version")
     testImplementation("androidx.arch.core:core-testing:2.1.0")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:$coroutines_version")
     androidTestImplementation("androidx.test.ext:junit:1.1.3")
