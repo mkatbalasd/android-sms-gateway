@@ -57,7 +57,16 @@ interface EnrolmentSteps {
     suspend fun register(enrolment: Enrolment): Register
     suspend fun complete(gatewayDeviceId: String, nonce: String): Complete
 
-    /** Undoes a registration whose completion was refused for good. */
+    /** The registration whose complete is not confirmed yet, if the app died or gave up unsure. */
+    suspend fun pendingCompletion(): PendingCompletion?
+
+    /** Stored before the first complete, so a crash can resume it. */
+    suspend fun savePendingCompletion(pending: PendingCompletion)
+
+    /**
+     * Undoes a registration whose completion was refused for good, and forgets
+     * the pending completion. A successful complete clears it by itself.
+     */
     suspend fun rollback()
 }
 
@@ -72,7 +81,10 @@ interface EnrolmentSteps {
  *   (the proxy allows 5 registrations a minute per address);
  * - `complete` that answers "not listed" or hits a transient error: retry every
  *   3 s for 60 s;
- * - any other refusal: stop, undo the registration, report the reason.
+ * - any other refusal: stop, undo the registration, report the reason;
+ * - the window ends on network errors or 5xx (the outcome is unknown, the
+ *   server may have committed): nothing is undone, the pending completion stays
+ *   stored and a later run (retry, or the next app start) resumes complete.
  *
  * Time only passes through [pause], so tests run without waiting.
  */
@@ -95,6 +107,10 @@ class EnrolmentFlow(
      * carried, or null when it carried none. Returns the final state.
      */
     suspend fun run(initial: Enrolment?): EnrolmentState {
+        if (initial == null) {
+            // A registration that was never confirmed: finish it, never register again.
+            steps.pendingCompletion()?.let { return complete(it.gatewayDeviceId, it.nonce) }
+        }
         var enrolment = initial
         if (enrolment == null) {
             enrolment = when (val minted = pollMint()) {
@@ -131,28 +147,44 @@ class EnrolmentFlow(
             }
         }
 
-        return complete(checkNotNull(registeredId), enrolment!!.nonce.orEmpty())
+        val nonce = enrolment!!.nonce.orEmpty()
+        steps.savePendingCompletion(PendingCompletion(checkNotNull(registeredId), nonce))
+        return complete(registeredId, nonce)
     }
 
     private suspend fun complete(gatewayDeviceId: String, nonce: String): EnrolmentState {
         mutableState.value = EnrolmentState.Completing
         var attempt = 0
         var lastReason = Reasons.NOT_LISTED
+        var unknown = false
         while (attempt < COMPLETE_ATTEMPTS) {
             if (attempt > 0) pause(COMPLETE_INTERVAL_MS)
             attempt++
             when (val result = steps.complete(gatewayDeviceId, nonce)) {
                 EnrolmentSteps.Complete.Ok -> return finish(EnrolmentState.Linked)
-                EnrolmentSteps.Complete.NotListed -> lastReason = Reasons.NOT_LISTED
-                is EnrolmentSteps.Complete.Transient -> lastReason = result.reason
+                EnrolmentSteps.Complete.NotListed -> {
+                    lastReason = Reasons.NOT_LISTED
+                    unknown = false
+                }
+
+                is EnrolmentSteps.Complete.Transient -> {
+                    lastReason = result.reason
+                    unknown = true
+                }
+
                 is EnrolmentSteps.Complete.Terminal -> {
                     steps.rollback()
                     return finish(EnrolmentState.Failed(result.reason))
                 }
             }
         }
-        // The window is over: the phone is not linked as far as the platform knows,
-        // so the local registration is undone and a retry starts from a fresh enrolment.
+        if (unknown) {
+            // The last answer was lost or a 5xx: the server may have committed. Keep the
+            // registration and the pending completion; a retry resumes complete.
+            return finish(EnrolmentState.Failed(lastReason))
+        }
+        // The server answered that the device is not listed: the phone is not linked as far
+        // as the platform knows, so the registration is undone and a retry starts afresh.
         steps.rollback()
         return finish(EnrolmentState.Failed(lastReason))
     }

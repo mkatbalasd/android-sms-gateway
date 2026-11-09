@@ -275,7 +275,10 @@ class HomeFragment : Fragment() {
         }
 
         // Mnaseb SIM: an unlinked phone opens on the first-run screen.
-        if (savedInstanceState == null && gatewaySettings.registrationInfo == null) {
+        if (savedInstanceState == null
+            && (gatewaySettings.registrationInfo == null || accountSettings.pendingCompletion != null)
+        ) {
+            // A registration whose completion is unconfirmed resumes on the linking screen.
             cloudFirstStart()
         }
 
@@ -461,7 +464,7 @@ class HomeFragment : Fragment() {
             }
 
             if (gatewaySettings.enabled
-                && gatewaySettings.registrationInfo == null
+                && (gatewaySettings.registrationInfo == null || accountSettings.pendingCompletion != null)
             ) {
                 cloudFirstStart()
                 return

@@ -33,6 +33,19 @@ internal class AccountSettingsTest {
     }
 
     @Test
+    fun aPendingCompletionSurvivesARestartAndMarkLinkedClearsItInOneWrite() {
+        val storage = FakeKeyValueStorage()
+        AccountSettings(storage).pendingCompletion = PendingCompletion("gw-1", "AB12CD34")
+
+        val again = AccountSettings(storage)
+        assertEquals(PendingCompletion("gw-1", "AB12CD34"), again.pendingCompletion)
+
+        again.markLinked()
+        assertTrue(AccountSettings(storage).linked)
+        assertEquals(null, AccountSettings(storage).pendingCompletion)
+    }
+
+    @Test
     fun theAccessTokenExpiresByTheServersLifetime() {
         val settings = AccountSettings(FakeKeyValueStorage())
         settings.saveSession(session, 1_000_000L)

@@ -27,6 +27,7 @@ class AppEnrolmentSteps(
     private val webhooksSettings: WebhooksSettings,
     private val settingsHelper: SettingsHelper,
     private val orchestrator: OrchestratorService,
+    private val accountSettings: AccountSettings,
 ) : EnrolmentSteps {
 
     private val appContext: Context = context.applicationContext
@@ -92,6 +93,9 @@ class AppEnrolmentSteps(
     override suspend fun complete(gatewayDeviceId: String, nonce: String): EnrolmentSteps.Complete =
         try {
             repository.completeEnrolment(gatewayDeviceId, nonce)
+            // One write: linked, and no pending completion. Done here, not in the screen,
+            // so a crash after the answer cannot leave the phone half linked.
+            accountSettings.markLinked()
             EnrolmentSteps.Complete.Ok
         } catch (e: AccountException) {
             val status = e.error.httpStatus
@@ -106,7 +110,14 @@ class AppEnrolmentSteps(
             EnrolmentSteps.Complete.Transient(EnrolmentFlow.Reasons.NETWORK)
         }
 
+    override suspend fun pendingCompletion(): PendingCompletion? = accountSettings.pendingCompletion
+
+    override suspend fun savePendingCompletion(pending: PendingCompletion) {
+        accountSettings.pendingCompletion = pending
+    }
+
     override suspend fun rollback() {
+        accountSettings.pendingCompletion = null
         gatewaySettings.registrationInfo = null
         settingsHelper.autostart = false
         withContext(Dispatchers.Main) { orchestrator.stop(appContext) }

@@ -13,6 +13,9 @@ import java.security.SecureRandom
  * of that sign-up or login. It never holds the password: the password is only
  * a parameter of the sign-up and login calls and there is no setter for it.
  */
+/** What complete needs after a crash: the gateway device id and the nonce of the enrolment. */
+data class PendingCompletion(val gatewayDeviceId: String, val nonce: String)
+
 class AccountSettings(private val storage: KeyValueStorage) {
 
     /** One JSON document under one key: strings with spaces survive the round trip. */
@@ -27,6 +30,7 @@ class AccountSettings(private val storage: KeyValueStorage) {
         val installId: String? = null,
         val linked: Boolean? = null,
         val pending: PendingVerification? = null,
+        val pendingCompletion: PendingCompletion? = null,
     ) {
         override fun toString() = "Stored(redacted)"
     }
@@ -92,7 +96,13 @@ class AccountSettings(private val storage: KeyValueStorage) {
         get() = read().pending
         set(value) = update { it.copy(pending = value) }
 
-    fun markLinked() = update { it.copy(linked = true) }
+    /** The gateway device whose complete has not been confirmed yet; survives a crash. */
+    var pendingCompletion: PendingCompletion?
+        get() = read().pendingCompletion
+        set(value) = update { it.copy(pendingCompletion = value) }
+
+    /** One write: linked, and nothing left to complete. */
+    fun markLinked() = update { it.copy(linked = true, pendingCompletion = null) }
 
     /** Forgets the tokens (a refused refresh, a sign-out). The install id and the link flag stay. */
     fun clearSession() = update {

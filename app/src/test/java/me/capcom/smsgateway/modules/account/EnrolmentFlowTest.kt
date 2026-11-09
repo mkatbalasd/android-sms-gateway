@@ -28,6 +28,8 @@ internal class EnrolmentFlowTest {
         var registers = 0
         var completes = 0
         var rollbacks = 0
+        var pending: PendingCompletion? = null
+        var saves = 0
         val registered = mutableListOf<Enrolment>()
         val completed = mutableListOf<Pair<String, String>>()
 
@@ -48,8 +50,16 @@ internal class EnrolmentFlowTest {
             return onComplete(gatewayDeviceId, nonce)
         }
 
+        override suspend fun pendingCompletion(): PendingCompletion? = pending
+
+        override suspend fun savePendingCompletion(pending: PendingCompletion) {
+            saves++
+            this.pending = pending
+        }
+
         override suspend fun rollback() {
             rollbacks++
+            pending = null
         }
     }
 
@@ -207,11 +217,71 @@ internal class EnrolmentFlowTest {
     }
 
     @Test
-    fun aNetworkThatNeverComesBackFailsWithNetworkAndUndoesTheRegistration() {
+    fun anUnknownOutcomeKeepsThePendingCompletionAndDoesNotUndoTheRegistration() {
         val steps = Steps(onComplete = { _, _ -> EnrolmentSteps.Complete.Transient("NETWORK") })
-        val (state, _) = run(steps, enrolment)
+        val (state, pauses) = run(steps, enrolment)
 
         assertEquals(EnrolmentState.Failed("NETWORK"), state)
+        assertEquals(21, steps.completes)
+        assertEquals(60_000L, pauses.sum())
+        assertEquals(0, steps.rollbacks)
+        assertEquals(PendingCompletion("gw-1", "AB12CD34"), steps.pending)
+    }
+
+    @Test
+    fun aServerErrorAtTheEndOfTheWindowIsAlsoUnknown() {
+        val steps = Steps(onComplete = { _, _ -> EnrolmentSteps.Complete.Transient("HTTP_503") })
+        val (state, _) = run(steps, enrolment)
+
+        assertEquals(EnrolmentState.Failed("HTTP_503"), state)
+        assertEquals(0, steps.rollbacks)
+        assertEquals(PendingCompletion("gw-1", "AB12CD34"), steps.pending)
+    }
+
+    @Test
+    fun thePendingCompletionIsStoredBeforeTheFirstComplete() {
+        var seenAtComplete: PendingCompletion? = null
+        lateinit var steps: Steps
+        steps = Steps(onComplete = { _, _ ->
+            seenAtComplete = steps.pending
+            EnrolmentSteps.Complete.Ok
+        })
+        run(steps, enrolment)
+
+        assertEquals(PendingCompletion("gw-1", "AB12CD34"), seenAtComplete)
+    }
+
+    @Test
+    fun aRestartWithAPendingCompletionResumesCompleteWithoutMintingOrRegistering() {
+        val steps = Steps()
+        steps.pending = PendingCompletion("gw-9", "NONCE999")
+        val (state, _) = run(steps, null)
+
+        assertEquals(EnrolmentState.Linked, state)
+        assertEquals(0, steps.mints)
+        assertEquals(0, steps.registers)
+        assertEquals(listOf("gw-9" to "NONCE999"), steps.completed)
+        assertEquals(0, steps.rollbacks)
+    }
+
+    @Test
+    fun aResumeThatMeetsADefiniteRefusalUndoesTheRegistration() {
+        val steps = Steps(onComplete = { _, _ -> EnrolmentSteps.Complete.Terminal("ENROLMENT_TOO_OLD") })
+        steps.pending = PendingCompletion("gw-9", "NONCE999")
+        val (state, _) = run(steps, null)
+
+        assertEquals(EnrolmentState.Failed("ENROLMENT_TOO_OLD"), state)
         assertEquals(1, steps.rollbacks)
+        assertEquals(null, steps.pending)
+    }
+
+    @Test
+    fun aResumeThatIsStillUnknownLeavesItPendingForTheNextTry() {
+        val steps = Steps(onComplete = { _, _ -> EnrolmentSteps.Complete.Transient("NETWORK") })
+        steps.pending = PendingCompletion("gw-9", "NONCE999")
+        run(steps, null)
+
+        assertEquals(0, steps.rollbacks)
+        assertEquals(PendingCompletion("gw-9", "NONCE999"), steps.pending)
     }
 }

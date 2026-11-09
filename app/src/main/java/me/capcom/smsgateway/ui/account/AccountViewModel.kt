@@ -212,6 +212,11 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
                 if (result is EnrolmentState.Linked) {
                     withContext(Dispatchers.IO) { settings.markLinked() }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                // Never crash the app from here: a registration, if any, stays pending.
+                enrolment.value = EnrolmentState.Failed(UiError.GENERIC)
             } finally {
                 watcher.cancel()
             }
