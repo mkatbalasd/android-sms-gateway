@@ -65,6 +65,44 @@ object SubscriptionsHelper {
         }
     }
 
+    /**
+     * Normalizes the `sub_id` read from the SMS provider into a real subscription id.
+     *
+     * Some OEM builds (e.g. Huawei EMUI) store the SIM slot index in `sub_id` instead of the
+     * subscription id. Subscription ids may be non-contiguous (1 and 3 for slots 0 and 1), so
+     * a slot index must be mapped through the active subscriptions.
+     *
+     * @param value the raw `sub_id` from the provider
+     * @param active active subscriptions as (subscriptionId, simSlotIndex) pairs
+     * @return the value itself if it is an active subscription id; the subscription id of the
+     * slot if it is a valid slot index; otherwise the value unchanged
+     */
+    fun normalizeProviderSubId(value: Int, active: List<Pair<Int, Int>>): Int {
+        if (active.any { it.first == value }) {
+            return value
+        }
+        if (value in 0 until active.size) {
+            active.find { it.second == value }?.let { return it.first }
+        }
+        return value
+    }
+
+    @SuppressLint("MissingPermission")
+    fun normalizeProviderSubId(context: Context, value: Int): Int {
+        if (!hasPhoneStatePermission(context)) {
+            return value
+        }
+
+        val subscriptionManager = getSubscriptionsManager(context) ?: return value
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
+            return value
+        }
+        val active = subscriptionManager.activeSubscriptionInfoList
+            ?.map { it.subscriptionId to it.simSlotIndex }
+            ?: return value
+        return normalizeProviderSubId(value, active)
+    }
+
     private fun hasPhoneStatePermission(context: Context): Boolean {
         return ActivityCompat.checkSelfPermission(
             context,
