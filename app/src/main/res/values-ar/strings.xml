@@ -97,6 +97,7 @@
     <string name="sign_in">تسجيل الدخول</string>
     <string name="sign_up">إنشاء حساب</string>
     <string name="signing_key">مفتاح التوقيع</string>
+    <string name="signing_key_set">معيّن (مخفي)</string>
     <string name="sms_gateway_is_running_on_port">Mnaseb SIM يعمل على المنفذ %1$d</string>
     <string name="sms_gateway">Mnaseb SIM</string>
     <string name="success_long_press_to_copy">نجاح، اضغط مطولاً للنسخ</string>
