@@ -1,0 +1,35 @@
+package me.capcom.smsgateway.modules.account
+
+import android.content.Context
+import android.os.Build
+import me.capcom.smsgateway.BuildConfig
+import org.koin.dsl.module
+
+val accountModule = module {
+    // One encrypted store, opened once.
+    single { AccountSettings(AccountStorageFactory.create(get<Context>())) }
+    single<AccountBackend> { AccountApi() }
+    single {
+        AccountRepository(
+            get<AccountBackend>(),
+            get<AccountSettings>(),
+            DeviceProfile(
+                model = Build.MODEL ?: "",
+                os = "Android " + (Build.VERSION.RELEASE ?: ""),
+                appVersion = BuildConfig.VERSION_NAME,
+            ),
+        )
+    }
+    factory {
+        AppEnrolmentSteps(
+            get<Context>(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+            get(),
+        )
+    }
+}

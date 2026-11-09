@@ -112,10 +112,15 @@ class GatewayService(
     //endregion
 
     //region Device
+    /**
+     * @param nameSuffix Mnaseb SIM self-enrolment: the server's nonce. When given, the device
+     * registers as `Mnaseb SIM/<model>/<nonce>`; otherwise the upstream `<MANUFACTURER>/<PRODUCT>`.
+     */
     internal suspend fun registerDevice(
         context: Context,
         pushToken: String?,
-        registerMode: RegistrationMode
+        registerMode: RegistrationMode,
+        nameSuffix: String? = null,
     ) {
         if (!settings.enabled) return
 
@@ -136,7 +141,12 @@ class GatewayService(
         }
 
         try {
-            val deviceName = "${Build.MANUFACTURER}/${Build.PRODUCT}"
+            val deviceName = DeviceNames.forRegistration(
+                Build.MANUFACTURER,
+                Build.PRODUCT,
+                Build.MODEL ?: "",
+                nameSuffix,
+            )
             val simCards = SubscriptionsHelper.getActiveSimCards(context)
             val keyInfo = deviceService.ensureKey()
             val request = GatewayApi.DeviceRegisterRequest(

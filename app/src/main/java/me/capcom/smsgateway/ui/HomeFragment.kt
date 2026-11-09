@@ -1,6 +1,7 @@
 package me.capcom.smsgateway.ui
 
 import android.Manifest
+import android.app.Activity
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -35,6 +36,7 @@ import me.capcom.smsgateway.R
 import me.capcom.smsgateway.databinding.FragmentHomeBinding
 import me.capcom.smsgateway.helpers.KeepAliveGuideState
 import me.capcom.smsgateway.helpers.SettingsHelper
+import me.capcom.smsgateway.modules.account.AccountSettings
 import me.capcom.smsgateway.modules.connection.ConnectionService
 import me.capcom.smsgateway.modules.events.EventBus
 import me.capcom.smsgateway.modules.gateway.GatewayService
@@ -44,6 +46,7 @@ import me.capcom.smsgateway.modules.localserver.LocalServerService
 import me.capcom.smsgateway.modules.localserver.LocalServerSettings
 import me.capcom.smsgateway.modules.localserver.events.IPReceivedEvent
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
+import me.capcom.smsgateway.ui.account.AccountActivity
 import me.capcom.smsgateway.ui.dialogs.FirstStartDialogFragment
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
 import org.koin.android.ext.android.inject
@@ -58,6 +61,7 @@ class HomeFragment : Fragment() {
     private val settingsHelper: SettingsHelper by inject()
     private val localServerSettings: LocalServerSettings by inject()
     private val gatewaySettings: GatewaySettings by inject()
+    private val accountSettings: AccountSettings by inject()
     private val connectionService: ConnectionService by inject()
 
     private val events: EventBus by inject()
@@ -271,7 +275,10 @@ class HomeFragment : Fragment() {
         }
 
         // Mnaseb SIM: an unlinked phone opens on the first-run screen.
-        if (savedInstanceState == null && gatewaySettings.registrationInfo == null) {
+        if (savedInstanceState == null
+            && (gatewaySettings.registrationInfo == null || accountSettings.pendingCompletion != null)
+        ) {
+            // A registration whose completion is unconfirmed resumes on the linking screen.
             cloudFirstStart()
         }
 
@@ -446,6 +453,7 @@ class HomeFragment : Fragment() {
 
         binding.switchUseRemoteServer.isChecked = gatewaySettings.enabled
         binding.switchUseLocalServer.isChecked = localServerSettings.enabled
+        renderAccountState()
     }
 
     private fun actionStart(start: Boolean) {
@@ -456,7 +464,7 @@ class HomeFragment : Fragment() {
             }
 
             if (gatewaySettings.enabled
-                && gatewaySettings.registrationInfo == null
+                && (gatewaySettings.registrationInfo == null || accountSettings.pendingCompletion != null)
             ) {
                 cloudFirstStart()
                 return
@@ -477,10 +485,56 @@ class HomeFragment : Fragment() {
             .show(parentFragmentManager, KeepAliveGuideDialogFragment.TAG)
     }
 
+    // Mnaseb SIM v0.3.0: an unlinked phone opens the account screens (welcome, permissions,
+    // create account or sign in, code, linking). The QR and typed-code dialog is the third
+    // button of the welcome screen.
     private fun cloudFirstStart() {
+        if (accountInFlight) return
+        accountInFlight = true
+        accountLauncher.launch(AccountActivity.starter(requireContext()))
+    }
+
+    private fun showLinkCodeDialog() {
         if (parentFragmentManager.findFragmentByTag(FirstStartDialogFragment.TAG) != null) return
         FirstStartDialogFragment.newInstance()
             .show(parentFragmentManager, FirstStartDialogFragment.TAG)
+    }
+
+    private var accountInFlight = false
+
+    private val accountLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        accountInFlight = false
+        when (result.resultCode) {
+            Activity.RESULT_OK -> {
+                // Linked through an app session: autostart was turned on by the enrolment.
+                _binding?.switchAutostart?.isChecked = settingsHelper.autostart
+                renderAccountState()
+                showKeepAliveGuide(onlyOnce = true)
+            }
+
+            AccountActivity.RESULT_USE_LINK_CODE -> showLinkCodeDialog()
+        }
+    }
+
+    // The cloud card shows the gateway login, password and device id; a phone linked by
+    // its account shows the account state instead and never displays those values.
+    private fun renderAccountState() {
+        val b = _binding ?: return
+        val linkedByAccount = accountSettings.linked && gatewaySettings.registrationInfo != null
+        b.cardCloudServer.isVisible = !linkedByAccount
+        b.cardAccount.isVisible = linkedByAccount
+        if (!linkedByAccount) return
+
+        val sandbox = accountSettings.tenantMode.equals("SANDBOX", ignoreCase = true)
+        b.textAccountLinked.setText(
+            if (sandbox) R.string.account_home_linked_test else R.string.account_home_linked
+        )
+        b.textAccountStatus.text = getString(
+            R.string.account_home_status,
+            accountSettings.tenantName.orEmpty()
+        )
     }
 
     private fun stop() {

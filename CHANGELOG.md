@@ -7,8 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0-rc1] - not tagged yet (the owner tags `mnaseb-sim-v0.3.0-rc1`)
+
 ### Added
+- Mnaseb SIM: new first run. Welcome screen (create an account, sign in, or "I have a link code from the workspace"), the three system permission prompts first, create an account for the business (name, mobile prefilled from the SIM when readable, password), sign in with a code, the six-digit code read automatically from the platform SMS, and automatic enrolment of the phone on the tenant's gateway account with a signing key it never shows; the home screen then says "Linked - Test mode". Arabic and English
+- Mnaseb SIM: a secondary user of the phone gets a stop screen instead of the sign-up
 - Mnaseb SIM: a keep-alive guide after linking (and from a home button) with live battery and start-on-boot status, a Huawei/Xiaomi/Samsung autostart screen shortcut with an app-info fallback, in Arabic and English
+
+### Changed
+- Mnaseb SIM: **Android backups are switched off** (`allowBackup=false`, empty data-extraction rules for cloud backup and device transfer) for every install, including the platform phone when it upgrades: the gateway registration, the signing key and the account tokens stay on the phone
+- Mnaseb SIM: the account tokens are kept in `EncryptedSharedPreferences` ("mnaseb-account"); the password is only sent once and is never stored
+- Mnaseb SIM: the release workflow prints the SHA-256 of the signing certificate into the job summary and the release notes, and compares it with the previous release
 
 ## [v1.78.0] - 2026-10-27
 

@@ -22,9 +22,13 @@
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
+    <!-- security-crypto 1.1.0-alpha06 supports API 21; the override only keeps the merge safe. -->
+    <uses-sdk tools:overrideLibrary="androidx.security.crypto" />
+
     <application
         android:name=".App"
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:networkSecurityConfig="${networkSecurityConfig}"
@@ -131,6 +135,12 @@
                     android:scheme="mnaseb-sim" />
             </intent-filter>
         </activity>
+
+        <!-- Mnaseb SIM v0.3.0: welcome, permissions, create account / sign in, code, linking. -->
+        <activity
+            android:name=".ui.account.AccountActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize" />
 
         <!-- Mnaseb SIM: QR scanner in any orientation (library default is landscape). -->
         <activity

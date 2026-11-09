@@ -10,6 +10,11 @@ jobs:
         build-type: [release, insecure]
     name: Build ${{ matrix.build-type }}
     if: github.repository == 'capcom6/android-sms-gateway' && github.event.pull_request.draft == false
+    # build-apk.yml asks for contents: write. A nested job cannot exceed its
+    # caller, and this fork's default token is read-only, so without this the
+    # run ends in startup_failure before the repository guard is evaluated.
+    permissions:
+      contents: write
     uses: ./.github/workflows/build-apk.yml
     with:
       version-name: ${{ github.sha }}

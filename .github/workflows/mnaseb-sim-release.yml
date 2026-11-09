@@ -37,6 +37,8 @@ jobs:
     outputs:
       signed: ${{ steps.sign.outputs.signed }}
       version: ${{ steps.version.outputs.version }}
+      cert: ${{ steps.cert.outputs.cert_sha256 }}
+      continuity: ${{ steps.cert.outputs.continuity }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
@@ -141,6 +143,50 @@ jobs:
           fi
           (cd dist && sha256sum *.apk > "$(basename "$OUT").sha256" && cat ./*.sha256)
 
+      # The fingerprint the download page shows (and B-57 registers), and whether the
+      # certificate is the one of the previous release: a different certificate means an
+      # installed older version cannot be upgraded and must be uninstalled first.
+      # Informational: this step never fails the build.
+      - name: Certificate fingerprint and continuity
+        id: cert
+        if: steps.sign.outputs.signed == 'true'
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          digest_of() {
+            "$BUILD_TOOLS/apksigner" verify --print-certs "$1" | grep -m1 'certificate SHA-256 digest' | sed 's/.*: *//'
+          }
+          APK="$(ls dist/*.apk | head -n 1)"
+          CERT="$(digest_of "$APK")"
+          test -n "$CERT"
+          echo "cert_sha256=${CERT}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Signing certificate"
+            echo "SHA-256: \`${CERT}\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          STATE="unknown"
+          PREV_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 --json tagName --jq '.[].tagName' | grep '^mnaseb-sim-v' | grep -vx "$GITHUB_REF_NAME" | head -n 1 || true)"
+          if [ -n "$PREV_TAG" ]; then
+            mkdir -p "$RUNNER_TEMP/prev"
+            if gh release download "$PREV_TAG" --repo "$GITHUB_REPOSITORY" --pattern '*.apk' --dir "$RUNNER_TEMP/prev"; then
+              PREV_APK="$(ls "$RUNNER_TEMP"/prev/*.apk | head -n 1)"
+              PREV_CERT="$(digest_of "$PREV_APK" || true)"
+              if [ -z "$PREV_CERT" ]; then
+                STATE="unknown"
+              elif [ "$PREV_CERT" = "$CERT" ]; then
+                STATE="same"
+              else
+                STATE="DIFFERENT"
+              fi
+            fi
+          fi
+          echo "continuity=${STATE}" >> "$GITHUB_OUTPUT"
+          echo "Certificate against ${PREV_TAG:-no previous release}: **${STATE}**" >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -171,10 +217,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           VERSION: ${{ needs.build.outputs.version }}
+          CERT: ${{ needs.build.outputs.cert }}
+          CONTINUITY: ${{ needs.build.outputs.continuity }}
         run: |
           set -euo pipefail
           ls -l dist
+          NOTES="Mnaseb SIM $VERSION (com.mnaseb.sim), built from $GITHUB_SHA. APK SHA-256: $(cut -d' ' -f1 dist/*.sha256). Signing certificate SHA-256: ${CERT:-unavailable}. Certificate against the previous release: ${CONTINUITY:-unknown}. Derived from android-sms-gateway (Apache-2.0); see NOTICE."
           gh release create "$GITHUB_REF_NAME" dist/*.apk dist/*.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --title "Mnaseb SIM $VERSION" \
-            --notes "Mnaseb SIM $VERSION (com.mnaseb.sim), built from $GITHUB_SHA. SHA-256: $(cut -d' ' -f1 dist/*.sha256). Derived from android-sms-gateway (Apache-2.0); see NOTICE."
+            --notes "$NOTES"

@@ -23,6 +23,15 @@ class WebhooksSettings(
                 8
             ).also { storage.set(SIGNING_KEY, it) }
 
+    /**
+     * Mnaseb SIM self-enrolment: the platform issues the signing key and pins it, so the
+     * key it sends replaces the auto-generated one before the gateway service starts.
+     */
+    fun setSigningKey(value: String) {
+        require(value.isNotBlank()) { "empty signing key" }
+        storage.set(SIGNING_KEY, value)
+    }
+
     companion object {
         const val INTERNET_REQUIRED = "internet_required"
         const val RETRY_COUNT = "retry_count"
