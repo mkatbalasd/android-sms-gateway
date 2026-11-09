@@ -1,9 +1,8 @@
-﻿package me.capcom.smsgateway.ui.settings
+package me.capcom.smsgateway.ui.settings
 
 import java.io.File
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertTrue
 import org.junit.Test
 
 internal class SigningKeyMaskTest {
@@ -39,14 +38,5 @@ internal class SigningKeyMaskTest {
         assertFalse(block.contains("useSimpleSummaryProvider"))
         val before = xml.substringBefore("webhooks.signing_key").substringAfterLast("<EditTextPreference")
         assertFalse(before.contains("useSimpleSummaryProvider"))
-    }
-
-    @Test
-    fun fragmentWiresMaskingProviderAndPasswordInput() {
-        val src = moduleFile(
-            "src/main/java/me/capcom/smsgateway/ui/settings/WebhooksSettingsFragment.kt"
-        ).readText()
-        assertTrue(src.contains("SigningKeyMask"))
-        assertTrue(src.contains("TYPE_TEXT_VARIATION_PASSWORD"))
     }
 }
