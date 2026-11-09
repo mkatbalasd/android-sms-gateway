@@ -525,6 +525,7 @@ internal class MessageStateServiceTest {
             h.service.transitionRecipients("failed-$sim", ProcessingState.Failed, "boom")
         }
 
+        runCurrent()
         val byId = h.events.associateBy { it.id }
         listOf(1, 2).forEach { sim ->
             assertEquals(ProcessingState.Sent, byId.getValue("sent-$sim").state)
@@ -546,6 +547,7 @@ internal class MessageStateServiceTest {
 
         h.service.transitionRecipients("m1", ProcessingState.Sent)
 
+        runCurrent()
         assertEquals(2, h.events.single().simNumber)
     }
     //#endregion
