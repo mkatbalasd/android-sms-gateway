@@ -75,7 +75,7 @@ internal class EnrolmentFlowTest {
     }
 
     @Test
-    fun nullEnrolmentPollsMintEveryFiveSecondsThenLinks() {
+    fun nullEnrolmentPollsMintEveryEightSecondsThenLinks() {
         var calls = 0
         val steps = Steps(onMint = {
             calls++
@@ -85,17 +85,19 @@ internal class EnrolmentFlowTest {
 
         assertEquals(EnrolmentState.Linked, state)
         assertEquals(4, steps.mints)
-        assertEquals(listOf(5_000L, 5_000L, 5_000L), pauses)
+        assertEquals(listOf(8_000L, 8_000L, 8_000L), pauses)
     }
 
     @Test
-    fun mintThatNeverGetsReadyFailsAfterSixtySeconds() {
+    fun mintThatNeverGetsReadyFailsAfterAboutAMinuteWithinTheRouteLimit() {
         val steps = Steps(onMint = { EnrolmentSteps.Mint.NotReady })
         val (state, pauses) = run(steps, null)
 
         assertEquals(EnrolmentState.Failed(EnrolmentFlow.Reasons.NOT_READY), state)
-        assertEquals(13, steps.mints)
-        assertEquals(60_000L, pauses.sum())
+        assertEquals(9, steps.mints)
+        assertEquals(64_000L, pauses.sum())
+        // POST /v1/app/enrolment allows 10 calls a minute (CARD-07): any 60 s window holds at most 8.
+        assertTrue(pauses.all { it >= 6_000L })
         assertEquals(0, steps.registers)
     }
 

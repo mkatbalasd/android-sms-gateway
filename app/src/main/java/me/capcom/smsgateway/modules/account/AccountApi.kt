@@ -128,10 +128,13 @@ class AccountApi(
 
     private data class ErrorEnvelope(val success: Boolean?, val error: ErrorBody?)
 
+    // The platform's `details` is an object for the rate limits, an array for a
+    // validation failure and a plain string for the per-tenant throughput guard,
+    // so it is read as a JSON tree and only an object is used.
     private data class ErrorBody(
         val code: String?,
         val message: String?,
-        val details: Map<String, Any?>?,
+        val details: com.google.gson.JsonElement?,
     )
 
     internal fun parseError(status: Int, text: String): AccountError {
@@ -141,15 +144,19 @@ class AccountApi(
             null
         }
         val code = body?.code?.takeIf { it.isNotBlank() } ?: "HTTP_$status"
-        val details = body?.details
+        val details = body?.details?.takeIf { it.isJsonObject }?.asJsonObject
         return AccountError(
             code = code,
             httpStatus = status,
             message = body?.message,
-            retryAfterSeconds = (details?.get("retry_after_seconds") as? Number)?.toInt(),
-            attemptsLeft = ((details?.get("attempts_left") ?: details?.get("attemptsLeft")) as? Number)
-                ?.toInt(),
+            retryAfterSeconds = details.number("retry_after_seconds"),
+            attemptsLeft = details.number("attempts_left") ?: details.number("attemptsLeft"),
         )
+    }
+
+    private fun com.google.gson.JsonObject?.number(name: String): Int? {
+        val member = this?.get(name) ?: return null
+        return if (member.isJsonPrimitive && member.asJsonPrimitive.isNumber) member.asInt else null
     }
 
     companion object {

@@ -199,6 +199,39 @@ internal class AccountApiTest {
     }
 
     @Test
+    fun aValidationFailureWithAnArrayOfDetailsKeepsItsCode() = runBlocking {
+        val api = api(Recorder()) {
+            HttpStatusCode.BadRequest to
+                """{"success":false,"error":{"code":"VALIDATION_ERROR","message":"Validation failed",
+                    "details":["password must be longer than 9 characters"],"path":"/v1/signup"}}"""
+        }
+        try {
+            api.signup(signupRequest())
+            fail("expected an error")
+        } catch (e: AccountException) {
+            assertEquals("VALIDATION_ERROR", e.error.code)
+            assertEquals(400, e.error.httpStatus)
+            assertEquals(null, e.error.retryAfterSeconds)
+        }
+    }
+
+    @Test
+    fun theTenantThroughputGuardWithAStringDetailKeepsItsCode() = runBlocking {
+        val api = api(Recorder()) {
+            HttpStatusCode.TooManyRequests to
+                """{"success":false,"error":{"code":"TOO_MANY_REQUESTS","message":"Throughput limit exceeded (10 TPS).",
+                    "details":"Too Many Requests"}}"""
+        }
+        try {
+            api.mintEnrolment("access-token")
+            fail("expected an error")
+        } catch (e: AccountException) {
+            assertEquals("TOO_MANY_REQUESTS", e.error.code)
+            assertEquals(429, e.error.httpStatus)
+        }
+    }
+
+    @Test
     fun aBodyThatIsNotAnEnvelopeGetsAnHttpCode() = runBlocking {
         val api = api(Recorder()) { HttpStatusCode.BadGateway to "<html>bad gateway</html>" }
         try {

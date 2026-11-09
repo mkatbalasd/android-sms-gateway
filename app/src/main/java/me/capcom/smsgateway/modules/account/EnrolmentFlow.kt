@@ -66,7 +66,8 @@ interface EnrolmentSteps {
  *
  * `Idle -> [RetryMint] -> Registering -> Completing -> Linked | Failed(reason)`
  *
- * - no enrolment yet: ask the server every 5 s for 60 s;
+ * - no enrolment yet: ask the server every 8 s for about a minute (at most 9
+ *   calls; the route allows 10 a minute);
  * - the gateway refuses the code (401): ask the server once more, never loop
  *   (the proxy allows 5 registrations a minute per address);
  * - `complete` that answers "not listed" or hits a transient error: retry every
@@ -178,8 +179,10 @@ class EnrolmentFlow(
     }
 
     companion object {
-        const val MINT_INTERVAL_MS = 5_000L
-        const val MINT_ATTEMPTS = 13 // the first call plus 12 more, 60 s in all
+        // POST /v1/app/enrolment is throttled to 10 calls a minute (CARD-07) and the
+        // SANDBOX tenant to 10 requests a second: one call every 8 s is 7.5 a minute.
+        const val MINT_INTERVAL_MS = 8_000L
+        const val MINT_ATTEMPTS = 9 // the first call plus 8 more, 64 s in all
         const val COMPLETE_INTERVAL_MS = 3_000L
         const val COMPLETE_ATTEMPTS = 21 // the first call plus 20 more, 60 s in all
     }

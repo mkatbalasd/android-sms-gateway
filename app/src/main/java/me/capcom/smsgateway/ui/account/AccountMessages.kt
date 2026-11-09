@@ -43,7 +43,7 @@ object AccountMessages {
             else R.string.account_err_otp_invalid
 
         "OTP_EXPIRED" -> R.string.account_err_otp_expired
-        "LOGIN_RATE_LIMIT", "SIGNUP_RATE_LIMIT", "HTTP_429", "ENROLMENT_TOO_MANY" ->
+        "LOGIN_RATE_LIMIT", "SIGNUP_RATE_LIMIT", "TOO_MANY_REQUESTS", "HTTP_429", "ENROLMENT_TOO_MANY" ->
             if (error.number != null) R.string.account_err_rate_limit_wait
             else R.string.account_err_rate_limit
 
