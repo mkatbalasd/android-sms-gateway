@@ -23,16 +23,17 @@ val accountModule = module {
         )
     }
     single<AppClient> { AppRepository(get<AppBackend>(), get<AccountRepository>()) }
-    factory {
-        AppUnlink(
+    factory<LocalCleanup> {
+        AndroidLocalCleanup(
             get<Context>(),
-            get<AppClient>(),
             get<AccountSettings>(),
+            get(),
             get(),
             get(),
             get(),
         )
     }
+    factory { AppUnlink(get<AppClient>(), get<LocalCleanup>()) }
     factory {
         AppEnrolmentSteps(
             get<Context>(),

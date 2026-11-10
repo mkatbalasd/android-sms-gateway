@@ -47,7 +47,13 @@ internal class FakeAppClient : AppClient {
 
     override suspend fun keepAlive(checklist: KeepAliveChecklist) = Unit
 
-    override suspend fun unlink(password: String) = Unit
+    var unlinkAnswer: () -> Unit = {}
+    val unlinkCalls = mutableListOf<String>()
+
+    override suspend fun unlink(password: String) {
+        unlinkCalls.add(password)
+        unlinkAnswer()
+    }
 }
 
 internal fun line(
