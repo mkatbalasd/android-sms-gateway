@@ -377,6 +377,7 @@
     <string name="numbers_status_verified_weak">Verified ✓ · self check (weaker)</string>
     <string name="numbers_status_send_failed">The check message was not sent. Make sure the SIM has credit.</string>
     <string name="numbers_status_timeout">Timed out. Try again.</string>
+    <string name="numbers_status_open_proof">A check is already open. Try again in %1$d minutes.</string>
     <string name="numbers_status_needs_number">Type the number of this SIM, then check again. It will be checked by a message to itself (weaker).</string>
 
     <!-- Home (F1-8) -->

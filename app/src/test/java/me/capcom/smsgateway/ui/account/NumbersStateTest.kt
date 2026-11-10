@@ -186,16 +186,82 @@ internal class NumbersStateTest {
     }
 
     @Test
-    fun anOpenProofWaitsWithoutSendingASecondSms() = runBlocking {
+    fun anOpenProofWithNothingToResendSaysWhenToRetryAndSendsNothing() = runBlocking {
         val client = FakeAppClient()
         client.verifyAnswer = { throw AccountException(AccountError("LINE_PROOF_OPEN", 409)) }
-        client.linesAnswer = { listOf(line(slot = 1)) }
         val sender = Sender()
 
         val result = verifier(client, sender).verify(row)
 
-        assertEquals(RowPhase.VERIFIED, result.phase)
+        assertEquals(RowPhase.OPEN_PROOF, result.phase)
+        assertEquals(10, result.retryMinutes)
         assertTrue(sender.calls.isEmpty())
+        assertEquals(0, client.linesCalls)
+    }
+
+    @Test
+    fun aFailedSendIsResentOnTheNextTapWithoutAskingThePlatformAgain() = runBlocking {
+        val client = FakeAppClient()
+        client.verifyAnswer = { mo }
+        // The radio refuses first; then the keeper tops up and taps again.
+        var radioOk = false
+        val calls = mutableListOf<Triple<Int, String, String>>()
+        val sender = object : LineSmsSender {
+            override suspend fun send(slot: Int, to: String, text: String): Boolean {
+                calls.add(Triple(slot, to, text))
+                return radioOk
+            }
+        }
+        client.linesAnswer = { listOf(line(slot = 1)) }
+        val v = verifier(client, sender)
+
+        val first = v.verify(row)
+        assertEquals(RowPhase.SEND_FAILED, first.phase)
+
+        // A second start would be 409 LINE_PROOF_OPEN: it must not even be asked.
+        client.verifyAnswer = { throw AccountException(AccountError("LINE_PROOF_OPEN", 409)) }
+        radioOk = true
+        val second = v.verify(first)
+
+        assertEquals(RowPhase.VERIFIED, second.phase)
+        assertEquals(1, client.verifyCalls.size)
+        assertEquals(2, calls.size)
+        assertEquals(calls[0], calls[1])
+    }
+
+    @Test
+    fun anExpiredKeptTextIsDroppedAndAFreshStartIsAsked() = runBlocking {
+        val client = FakeAppClient()
+        client.verifyAnswer = { mo }
+        val clock = Clock()
+        var radioOk = false
+        val sender = object : LineSmsSender {
+            override suspend fun send(slot: Int, to: String, text: String) = radioOk
+        }
+        val v = verifier(client, sender, clock)
+        val first = v.verify(row)
+        assertEquals(RowPhase.SEND_FAILED, first.phase)
+
+        clock.now += 601_000L
+        radioOk = true
+        client.linesAnswer = { listOf(line(slot = 1)) }
+        v.verify(first)
+
+        assertEquals(2, client.verifyCalls.size)
+    }
+
+    @Test
+    fun aDestinationThatIsNotANumberIsRefusedBeforeAnySms() = runBlocking {
+        val sender = Sender()
+        for (bad in listOf("", "evil", "+1 800", "http://x.example", "12", "+1234567890123456")) {
+            val client = FakeAppClient()
+            client.verifyAnswer = { LineVerifyStart("MO", bad, "tok", 600) }
+            val result = verifier(client, sender).verify(row)
+            assertEquals("for '$bad'", RowPhase.FAILED, result.phase)
+        }
+        assertTrue(sender.calls.isEmpty())
+        assertTrue(NumbersVerifier.plausibleDestination("+967700000001"))
+        assertTrue(NumbersVerifier.plausibleDestination("714"))
     }
 
     @Test

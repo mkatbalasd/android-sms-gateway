@@ -22,6 +22,9 @@ enum class RowPhase {
 
     /** The platform has no line for this country: the keeper must type the number (LOOPBACK). */
     NEEDS_NUMBER,
+
+    /** A check is open on the platform and this screen has no text to resend: retry in [NumberRow.retryMinutes]. */
+    OPEN_PROOF,
     FAILED,
 }
 
@@ -37,6 +40,7 @@ data class NumberRow(
     val errorCode: String? = null,
     val verifiedMasked: String? = null,
     val verifiedAt: String? = null,
+    val retryMinutes: Int? = null,
 ) {
     val busy: Boolean
         get() = phase == RowPhase.STARTING || phase == RowPhase.SENDING || phase == RowPhase.WAITING
@@ -104,39 +108,72 @@ class NumbersVerifier(
     private val timeoutMs: Long = TIMEOUT_MS,
 ) {
 
+    /**
+     * A started proof whose SMS could not be sent. Kept in memory only, for one resend while
+     * the platform's token is still valid (it blocks a new start until it expires); never
+     * stored, logged or shown.
+     */
+    private class Unsent(val method: String, val to: String, val text: String, val validUntilMs: Long) {
+        override fun toString() = "Unsent(redacted)"
+    }
+
+    private val unsent = HashMap<Int, Unsent>()
+
     /** Runs the proof for [row] and returns the row in its final phase. [onPhase] reports the steps. */
     suspend fun verify(row: NumberRow, onPhase: (RowPhase) -> Unit = {}): NumberRow {
         onPhase(RowPhase.STARTING)
+
+        // The last tap's SMS did not leave and its token is still open: send that same text again.
+        val kept = unsent[row.slot]
+        if (kept != null) {
+            if (nowMs() < kept.validUntilMs) return send(row, kept, onPhase)
+            unsent.remove(row.slot)
+        }
+
         val start = try {
             client.verifyLine(row.slot, row.typed)
         } catch (e: AccountException) {
             return when (e.error.code) {
                 // The platform has no line for the country: only the typed number can prove the SIM.
                 "NO_PLATFORM_LINE" -> row.copy(phase = RowPhase.NEEDS_NUMBER, errorCode = e.error.code)
-                // A proof is already open for this slot: its SMS may be on the way; wait for it.
-                "LINE_PROOF_OPEN" -> return await(row, onPhase)
+                // A check is open and this screen holds no text to resend (a new screen, or the
+                // text was sent): say so and when to retry. The platform's token lives 10 minutes.
+                "LINE_PROOF_OPEN" -> row.copy(
+                    phase = RowPhase.OPEN_PROOF,
+                    errorCode = e.error.code,
+                    retryMinutes = PROOF_TTL_MINUTES,
+                )
+
                 else -> row.copy(phase = RowPhase.FAILED, errorCode = e.error.code)
             }
         } catch (e: IOException) {
             return row.copy(phase = RowPhase.FAILED, errorCode = UiError.NETWORK)
         }
 
+        val method = start.method
         val to = start.to
         val text = start.text
-        if (start.method !in KNOWN_METHODS || to.isNullOrBlank() || text.isNullOrBlank()) {
+        if (method !in KNOWN_METHODS || text.isNullOrBlank() || !plausibleDestination(to)) {
             return row.copy(phase = RowPhase.FAILED, errorCode = "BAD_RESPONSE")
         }
+        val ttlMs = (start.expiresIn ?: PROOF_TTL_MINUTES * 60L).coerceIn(1L, 3_600L) * 1000L
+        return send(row, Unsent(method!!, to!!, text, nowMs() + ttlMs), onPhase)
+    }
 
+    private suspend fun send(row: NumberRow, proof: Unsent, onPhase: (RowPhase) -> Unit): NumberRow {
         onPhase(RowPhase.SENDING)
         // MO: to the platform line. LOOPBACK: to the typed number, which the platform returns as `to`.
         val sent = try {
-            sender.send(row.slot, to, text)
+            sender.send(row.slot, proof.to, proof.text)
         } catch (e: Exception) {
             false
         }
-        if (!sent) return row.copy(phase = RowPhase.SEND_FAILED, method = start.method)
-
-        return await(row.copy(method = start.method), onPhase)
+        if (!sent) {
+            unsent[row.slot] = proof
+            return row.copy(phase = RowPhase.SEND_FAILED, method = proof.method)
+        }
+        unsent.remove(row.slot)
+        return await(row.copy(method = proof.method), onPhase)
     }
 
     private suspend fun await(row: NumberRow, onPhase: (RowPhase) -> Unit): NumberRow {
@@ -172,5 +209,10 @@ class NumbersVerifier(
         const val POLL_INTERVAL_MS = 3_000L
         const val TIMEOUT_MS = 90_000L
         private val KNOWN_METHODS = setOf(LineVerifyStart.METHOD_MO, LineVerifyStart.METHOD_LOOPBACK)
+        private const val PROOF_TTL_MINUTES = 10
+        private val DESTINATION = Regex("^\\+?[0-9]{3,15}$")
+
+        /** A phone number in international form or a short code: digits only, 3 to 15, one optional plus. */
+        fun plausibleDestination(to: String?): Boolean = to != null && DESTINATION.matches(to)
     }
 }

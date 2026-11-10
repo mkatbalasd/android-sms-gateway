@@ -354,6 +354,7 @@
     <string name="numbers_status_verified_weak">تم التحقق ✓ · تحقق ذاتي (أضعف)</string>
     <string name="numbers_status_send_failed">لم تُرسل رسالة التحقق — تأكد من رصيد الشريحة</string>
     <string name="numbers_status_timeout">انتهت المهلة — أعد المحاولة</string>
+    <string name="numbers_status_open_proof">يوجد تحقق مفتوح — أعد المحاولة بعد %1$d دقيقة</string>
     <string name="numbers_status_needs_number">اكتب رقم هذه الشريحة ثم أعد التحقق. سيتم التحقق برسالة إلى نفس الرقم (أضعف).</string>
 
     <!-- Home (F1-8) -->

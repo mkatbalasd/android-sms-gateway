@@ -121,6 +121,7 @@ class NumbersFragment : Fragment() {
         RowPhase.SEND_FAILED -> getString(R.string.numbers_status_send_failed)
         RowPhase.TIMED_OUT -> getString(R.string.numbers_status_timeout)
         RowPhase.NEEDS_NUMBER -> getString(R.string.numbers_status_needs_number)
+        RowPhase.OPEN_PROOF -> getString(R.string.numbers_status_open_proof, row.retryMinutes ?: 10)
         RowPhase.FAILED -> AccountMessages.text(
             requireContext(), UiError(row.errorCode ?: UiError.GENERIC)
         )
