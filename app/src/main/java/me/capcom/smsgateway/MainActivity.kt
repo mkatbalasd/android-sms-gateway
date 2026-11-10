@@ -13,8 +13,11 @@ import me.capcom.smsgateway.ui.HolderFragment
 import me.capcom.smsgateway.ui.HomeFragment
 import me.capcom.smsgateway.ui.SettingsFragment
 import me.capcom.smsgateway.helpers.LocaleHelper
+import me.capcom.smsgateway.modules.account.AccountSettings
+import me.capcom.smsgateway.modules.account.AppEnrolled
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
 import me.capcom.smsgateway.modules.gateway.LinkPayload
+import me.capcom.smsgateway.ui.account.HomeV2Fragment
 import me.capcom.smsgateway.ui.dialogs.FirstStartDialogFragment
 import org.koin.android.ext.android.inject
 
@@ -23,6 +26,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
     private val gatewaySettings: GatewaySettings by inject()
+    private val accountSettings: AccountSettings by inject()
+    private lateinit var adapter: FragmentsAdapter
 
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(LocaleHelper.onAttach(newBase))
@@ -34,7 +39,7 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        val adapter = FragmentsAdapter(this)
+        adapter = FragmentsAdapter(this, AppEnrolled.check(accountSettings, gatewaySettings))
         binding.viewPager.adapter = adapter
 
         TabLayoutMediator(binding.tabLayout, binding.viewPager) { tab, position ->
@@ -92,25 +97,44 @@ class MainActivity : AppCompatActivity() {
             .showNow(supportFragmentManager, FirstStartDialogFragment.TAG)
     }
 
-    class FragmentsAdapter(activity: AppCompatActivity) :
+    override fun onResume() {
+        super.onResume()
+        // Mnaseb SIM v0.3.0: a phone that linked itself through its account gets the
+        // account home screen; the QR-path (platform phone) install keeps the upstream one.
+        val enrolled = AppEnrolled.check(accountSettings, gatewaySettings)
+        if (enrolled != adapter.appHome) {
+            adapter.appHome = enrolled
+            adapter.notifyDataSetChanged()
+        }
+    }
+
+    class FragmentsAdapter(activity: AppCompatActivity, var appHome: Boolean) :
         androidx.viewpager2.adapter.FragmentStateAdapter(activity) {
 
         override fun getItemCount(): Int = 3
 
         override fun createFragment(position: Int): Fragment {
             return when (position) {
-                0 -> HomeFragment.newInstance()
+                0 -> if (appHome) HomeV2Fragment() else HomeFragment.newInstance()
                 1 -> HolderFragment.newInstance()
                 else -> SettingsFragment.newInstance()
             }
         }
 
+        // A different home screen is a different item, so the pager replaces the fragment.
+        override fun getItemId(position: Int): Long =
+            if (position == 0 && appHome) HOME_V2_ITEM_ID else position.toLong()
+
+        override fun containsItem(itemId: Long): Boolean =
+            itemId == 1L || itemId == 2L || itemId == if (appHome) HOME_V2_ITEM_ID else 0L
     }
 
     companion object {
         const val TAB_INDEX_HOME = 0
         const val TAB_INDEX_MESSAGES = 1
         const val TAB_INDEX_SETTINGS = 2
+
+        const val HOME_V2_ITEM_ID = 100L
 
         private const val EXTRA_TAB_INDEX = "tabIndex"
 

@@ -324,4 +324,84 @@
     <string name="account_home_linked_test">مربوط ✓ — وضع التجربة</string>
     <string name="account_home_linked">مربوط ✓</string>
     <string name="account_home_status">هذا الهاتف مربوط بحساب %1$s. أبقِ التطبيق يعمل ليستقبل رسائلك.</string>
+
+    <!-- Mnaseb SIM v0.3.0 (CARD-12): errors of the app routes -->
+    <string name="account_err_wrong_password">كلمة المرور غير صحيحة.</string>
+    <string name="account_err_owner_only">هذا الإجراء لمالك الحساب فقط.</string>
+    <string name="account_err_daily_limit">وصلت إلى حد التجربة اليوم.</string>
+    <string name="account_err_no_platform_line">لا يوجد خط من مناسب لبلدك بعد. اكتب رقم هذه الشريحة لنتحقق منه ذاتياً.</string>
+    <string name="account_err_number_held">هذا الرقم مستخدم في حساب آخر.</string>
+    <string name="account_err_proof_open">هناك تحقق جارٍ لهذه الشريحة. انتظر لحظة.</string>
+
+    <!-- Numbers (F1-6) -->
+    <string name="numbers_title_none">لم نجد شريحة في هذا الهاتف</string>
+    <string name="numbers_title_one">وجدنا شريحة في هذا الهاتف</string>
+    <string name="numbers_title_many">وجدنا %1$d شرائح في هذا الهاتف</string>
+    <string name="numbers_no_sim">ضع شريحة في الهاتف ثم افتح التطبيق من جديد. بدون شريحة لا يستطيع الهاتف الإرسال.</string>
+    <string name="numbers_carrier_unknown">شركة الاتصالات غير معروفة</string>
+    <string name="numbers_slot_title">شريحة %1$d · %2$s</string>
+    <string name="numbers_number_ends">الرقم ينتهي بـ %1$s</string>
+    <string name="numbers_number_unknown">الرقم غير معروف</string>
+    <string name="numbers_verified_number">%1$s</string>
+    <string name="numbers_type_number">رقم هذه الشريحة (بالصيغة الدولية)</string>
+    <string name="numbers_cost_note">يرسل الهاتف رسالة واحدة من كل شريحة إلى خط مناسب (بتكلفة رسالة واحدة).</string>
+    <string name="numbers_verify_now">تحقق الآن</string>
+    <string name="numbers_continue">متابعة</string>
+    <string name="numbers_skip">لاحقاً</string>
+    <string name="numbers_status_sending">يرسل الهاتف رسالة التحقق…</string>
+    <string name="numbers_status_waiting">ننتظر وصول رسالة التحقق…</string>
+    <string name="numbers_status_verified">تم التحقق ✓</string>
+    <string name="numbers_status_verified_weak">تم التحقق ✓ · تحقق ذاتي (أضعف)</string>
+    <string name="numbers_status_send_failed">لم تُرسل رسالة التحقق — تأكد من رصيد الشريحة</string>
+    <string name="numbers_status_timeout">انتهت المهلة — أعد المحاولة</string>
+    <string name="numbers_status_open_proof">يوجد تحقق مفتوح — أعد المحاولة بعد %1$d دقيقة</string>
+    <string name="numbers_status_needs_number">اكتب رقم هذه الشريحة ثم أعد التحقق. سيتم التحقق برسالة إلى نفس الرقم (أضعف).</string>
+
+    <!-- Home (F1-8) -->
+    <string name="home_mode_test">وضع التجربة</string>
+    <string name="home_mode_live">الإرسال الحقيقي مفعّل</string>
+    <string name="home_status_checking">جارٍ فحص الهاتف…</string>
+    <string name="home_status_working_now">يعمل ✓ — متصل الآن</string>
+    <string name="home_status_working_ago">يعمل — آخر اتصال قبل %1$d دقيقة</string>
+    <string name="home_status_stopped">متوقف — افتح التطبيق وشغّل الخدمة</string>
+    <string name="home_status_stopped_permission">متوقف — اسمح بإذن الرسائل</string>
+    <string name="home_status_stopped_sim">متوقف — لا توجد شريحة</string>
+    <string name="home_status_offline">الهاتف لا يتصل</string>
+    <string name="home_start_service">تشغيل</string>
+    <string name="home_keep_alive_left">أبقِ الهاتف يعمل: %1$d خطوات متبقية ›</string>
+    <string name="home_keep_alive_waiting">أبقِ الهاتف يعمل: بانتظار ليلة كاملة من الاتصال ›</string>
+    <string name="home_numbers">الأرقام</string>
+    <string name="home_number_ready">%1$s · جاهز للإرسال</string>
+    <string name="home_number_not_ready">%1$s · غير موثّق</string>
+    <string name="home_no_numbers">لا يوجد رقم موثّق بعد.</string>
+    <string name="home_verify_numbers">تحقق من أرقامي</string>
+    <string name="home_counters_test">التجربة مجانية · أُرسل اليوم %1$d · الحد %2$d</string>
+    <string name="home_counters_test_nolimit">التجربة مجانية · أُرسل اليوم %1$d</string>
+    <string name="home_counters_live">الرصيد %1$s · أُرسل اليوم %2$d</string>
+    <string name="home_send_test">أرسل رسالة تجريبية</string>
+    <string name="home_open_dashboard">افتح لوحة التحكم</string>
+    <string name="home_no_browser">لم نجد متصفحاً في هذا الهاتف.</string>
+    <string name="home_approval_start">فعّل الإرسال الحقيقي ›</string>
+    <string name="home_approval_review">طلب التفعيل قيد المراجعة ›</string>
+    <string name="home_approval_needs_info">نحتاج معلومات إضافية لطلب التفعيل ›</string>
+    <string name="home_approval_rejected">لم يُقبل طلب التفعيل. افتح لوحة التحكم للتفاصيل ›</string>
+    <string name="home_test_numbers">الأرقام التجريبية %1$d من %2$d ›</string>
+    <string name="home_extra_phone">هاتف إضافي؟ ثبّت التطبيق وسجّل الدخول.</string>
+
+    <!-- Test message (F1-9) -->
+    <string name="test_message_title">أرسل رسالة تجريبية</string>
+    <string name="test_message_to">إلى</string>
+    <string name="test_message_text">الرسالة</string>
+    <string name="test_message_default">رسالة تجريبية من مناسب</string>
+    <string name="test_message_send">إرسال</string>
+    <string name="test_message_close">إغلاق</string>
+    <string name="test_message_no_recipients">لا يوجد رقم تجريبي موثّق بعد. أضف رقماً من لوحة التحكم.</string>
+    <string name="test_message_on_its_way">في الطريق…</string>
+    <string name="test_message_arrived">وصلت ✓ خلال %1$d ث</string>
+    <string name="test_message_failed">لم تصل الرسالة. تأكد من رصيد الشريحة ومن أن الهاتف متصل.</string>
+    <string name="test_message_expired">انتهت صلاحية الرسالة لأن الهاتف لم يستلمها. افتح التطبيق وحاول مرة أخرى.</string>
+    <string name="test_message_unknown">لا نعرف بعد إن كانت الرسالة وصلت. لا تعد إرسالها الآن.</string>
+    <string name="test_message_still">ما زالت في الطريق. تابعها من تبويب الرسائل.</string>
+    <string name="test_message_cap">وصلت إلى حد التجربة اليوم (%1$d)</string>
+    <string name="test_message_no_line">تحقق من رقم شريحة أولاً.</string>
 </resources>

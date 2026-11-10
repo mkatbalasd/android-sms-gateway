@@ -56,6 +56,14 @@ object AccountMessages {
         "ENROLMENT_CODE_REFUSED" -> R.string.account_err_enrolment_code
         "ENROLMENT_SERVER_MISMATCH" -> R.string.account_err_enrolment_server
         "ENROLMENT_NOT_LISTED" -> R.string.account_err_not_listed
+        // CARD-12: unlink with a wrong password, and the app routes after linking.
+        "INVALID_CREDENTIALS" -> R.string.account_err_wrong_password
+        "OWNER_REQUIRED" -> R.string.account_err_owner_only
+        "SANDBOX_DAILY_LIMIT" -> R.string.account_err_daily_limit
+        "NO_PLATFORM_LINE" -> R.string.account_err_no_platform_line
+        "NUMBER_HELD" -> R.string.account_err_number_held
+        "LINE_PROOF_OPEN" -> R.string.account_err_proof_open
+        "BAD_RESPONSE" -> R.string.account_err_generic
         else ->
             if (error.code.startsWith("ENROLMENT")) R.string.account_err_enrolment
             else R.string.account_err_generic

@@ -47,6 +47,7 @@ import me.capcom.smsgateway.modules.localserver.LocalServerSettings
 import me.capcom.smsgateway.modules.localserver.events.IPReceivedEvent
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
 import me.capcom.smsgateway.ui.account.AccountActivity
+import me.capcom.smsgateway.ui.account.NumbersActivity
 import me.capcom.smsgateway.ui.dialogs.FirstStartDialogFragment
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
 import me.capcom.smsgateway.ui.settings.CloudPasswordMask
@@ -510,7 +511,9 @@ class HomeFragment : Fragment() {
                 // Linked through an app session: autostart was turned on by the enrolment.
                 _binding?.switchAutostart?.isChecked = settingsHelper.autostart
                 renderAccountState()
-                showKeepAliveGuide(onlyOnce = true)
+                // Mnaseb SIM v0.3.0: next come the SIM numbers, then the keep-alive guide
+                // (NumbersActivity); the account home screen takes over when it closes.
+                startActivity(NumbersActivity.starter(requireContext()))
             }
 
             AccountActivity.RESULT_USE_LINK_CODE -> showLinkCodeDialog()

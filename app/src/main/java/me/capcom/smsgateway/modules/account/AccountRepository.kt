@@ -137,7 +137,8 @@ class AccountRepository(
 
     //region App session
 
-    private suspend fun <T> withSession(call: suspend (access: String) -> T): T {
+    /** Runs [call] with the app access token: refreshed before when due, and once after a 401. */
+    suspend fun <T> withSession(call: suspend (access: String) -> T): T {
         var access = currentAccess()
         try {
             return call(access)

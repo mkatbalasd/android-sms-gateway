@@ -88,6 +88,14 @@ class KeepAliveGuideDialogFragment : DialogFragment() {
         super.onDestroyView()
     }
 
+    // Mnaseb SIM v0.3.0: the screen that opened the guide learns when it is closed,
+    // so it can report the checklist and move on.
+    override fun onDismiss(dialog: android.content.DialogInterface) {
+        super.onDismiss(dialog)
+        // Not attached (the screen is going away): nobody is waiting for the result.
+        runCatching { parentFragmentManager.setFragmentResult(REQUEST_KEY, Bundle.EMPTY) }
+    }
+
     private fun refresh() {
         val b = _binding ?: return
         val ctx = context ?: return
@@ -146,6 +154,9 @@ class KeepAliveGuideDialogFragment : DialogFragment() {
 
     companion object {
         const val TAG = "keep_alive_guide"
+
+        /** Fragment result key, sent to the parent fragment manager when the guide closes. */
+        const val REQUEST_KEY = "keep_alive_guide_closed"
 
         private const val PREF_SHOWN = "keep_alive_guide_shown"
         private const val PREF_OEM_CONFIRMED = "keep_alive_guide_oem_confirmed"
