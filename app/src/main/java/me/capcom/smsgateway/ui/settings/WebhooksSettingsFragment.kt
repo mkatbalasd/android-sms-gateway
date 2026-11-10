@@ -10,6 +10,16 @@ class WebhooksSettingsFragment : BasePreferenceFragment() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.webhooks_preferences, rootKey)
+
+        // The signing key must never be rendered in the list: masked summary only.
+        findPreference<EditTextPreference>("webhooks.signing_key")?.summaryProvider =
+            Preference.SummaryProvider<EditTextPreference> { pref ->
+                SigningKeyMask.summary(
+                    pref.text,
+                    getString(R.string.signing_key_set),
+                    getString(R.string.not_set)
+                )
+            }
     }
 
     override fun onDisplayPreferenceDialog(preference: Preference) {
@@ -23,7 +33,8 @@ class WebhooksSettingsFragment : BasePreferenceFragment() {
 
         if (preference.key == "webhooks.signing_key") {
             (preference as EditTextPreference).setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT
+                it.inputType =
+                    InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 it.setSelectAllOnFocus(true)
                 it.selectAll()
             }

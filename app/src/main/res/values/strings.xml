@@ -115,6 +115,7 @@
     <string name="sign_in">Sign In</string>
     <string name="sign_up">Sign Up</string>
     <string name="signing_key">Signing Key</string>
+    <string name="signing_key_set">Set (hidden)</string>
     <string name="sms_gateway_is_running_on_port">Mnaseb SIM is running on port %1$d</string>
     <string name="sms_gateway">Mnaseb SIM</string>
     <string name="sms" translatable="false">sms</string>
