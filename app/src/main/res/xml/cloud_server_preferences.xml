@@ -32,7 +32,6 @@
             app:selectable="false"
             app:title="@string/username" />
         <EditTextPreference
-            app:enableCopying="true"
             app:icon="@drawable/ic_password"
             app:key="gateway.password"
             app:persistent="false"
