@@ -13,6 +13,7 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.text.BidiFormatter
 import androidx.core.view.isVisible
+import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -188,6 +189,9 @@ class CreateAccountFragment : Fragment() {
             if (prefilled.isEmpty()) {
                 binding.layoutMobile.helperText = getString(R.string.account_mobile_empty_hint)
             }
+        }
+        binding.editMobile.doAfterTextChanged {
+            if (!it.isNullOrEmpty()) binding.layoutMobile.helperText = null
         }
 
         binding.buttonCreateSubmit.setOnClickListener { submit(viewModel) }
