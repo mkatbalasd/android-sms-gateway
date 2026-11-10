@@ -655,5 +655,22 @@ internal class AccountApiTest {
         }
     }
 
+    @Test
+    fun resetForgetsTheAccountButKeepsTheInstallId() {
+        val storage = FakeKeyValueStorage()
+        val settings = AccountSettings(storage)
+        val install = settings.installId
+        settings.saveSession(AppSession("a", "r", 900, "s"), 1L)
+        settings.saveIdentity(TenantInfo("t", "Demo", "SANDBOX"), UserInfo("u", "OWNER"))
+        settings.markLinked()
+
+        settings.reset()
+
+        assertFalse(settings.linked)
+        assertFalse(settings.hasSession)
+        assertNull(settings.tenantName)
+        assertEquals(install, settings.installId)
+    }
+
     //endregion
 }

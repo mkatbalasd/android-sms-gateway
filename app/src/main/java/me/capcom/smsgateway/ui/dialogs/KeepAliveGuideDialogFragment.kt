@@ -158,6 +158,14 @@ class KeepAliveGuideDialogFragment : DialogFragment() {
         /** Fragment result key, sent to the parent fragment manager when the guide closes. */
         const val REQUEST_KEY = "keep_alive_guide_closed"
 
+        /** After «فصل هذا الهاتف»: the next link starts with a fresh guide. */
+        fun forget(context: Context) {
+            prefs(context).edit {
+                remove(PREF_SHOWN)
+                remove(PREF_OEM_CONFIRMED)
+            }
+        }
+
         private const val PREF_SHOWN = "keep_alive_guide_shown"
         private const val PREF_OEM_CONFIRMED = "keep_alive_guide_oem_confirmed"
 

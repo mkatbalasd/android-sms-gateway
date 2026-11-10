@@ -109,6 +109,12 @@ class AccountSettings(private val storage: KeyValueStorage) {
         it.copy(access = null, refresh = null, accessExpiresAtMs = null)
     }
 
+    /**
+     * Forgets the account after «فصل هذا الهاتف»: tokens, tenant, link flag and anything pending.
+     * Only the random install id stays, so a later sign-in is still one install.
+     */
+    fun reset() = update { Stored(installId = it.installId) }
+
     private fun newInstallId(): String {
         val random = SecureRandom()
         val out = StringBuilder(INSTALL_ID_LENGTH)

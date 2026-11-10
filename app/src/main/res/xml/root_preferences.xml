@@ -1,6 +1,10 @@
 <PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
+    <!-- Mnaseb SIM v0.3.0: the keys below let SettingsVisibility hide these entries on an
+         install linked through the account (the customer phone). Hidden, not removed: the
+         QR-path install (the platform phone) keeps every screen. -->
     <Preference
+        app:key="settings.device"
         app:fragment="me.capcom.smsgateway.ui.settings.DeviceSettingsFragment"
         app:icon="@drawable/ic_encryption"
         app:summary="@string/device_keys_management"
@@ -13,30 +17,36 @@
         app:summary="@string/port_credentials_etc"
         app:title="@string/local_server_dotdotdot" />
     <Preference
+        app:key="settings.cloud_server"
         android:icon="@drawable/ic_cloud_server"
         app:fragment="me.capcom.smsgateway.ui.settings.CloudServerSettingsFragment"
         app:summary="@string/api_url_private_token_credentials_etc"
         app:title="@string/cloud_server_dotdotdot" />
 
     <Preference
+        app:key="settings.messages"
         android:icon="@drawable/ic_messages"
         app:fragment="me.capcom.smsgateway.ui.settings.MessagesSettingsFragment"
         app:title="@string/messages"
         app:summary="@string/delays_limits_etc" />
 
     <Preference
+        app:key="settings.inbox"
         android:icon="@drawable/ic_inbox"
         app:fragment="me.capcom.smsgateway.ui.settings.InboxSettingsFragment"
         app:summary="@string/inbox_settings_summary"
         app:title="@string/inbox_dotdotdot" />
 
     <Preference
+        app:key="settings.webhooks"
         android:icon="@drawable/ic_webhook"
         app:fragment="me.capcom.smsgateway.ui.settings.WebhooksSettingsFragment"
         app:summary="@string/retries_signing_etc"
         app:title="@string/webhooks_dotdotdot" />
 
-    <PreferenceCategory app:title="@string/encryption">
+    <PreferenceCategory
+        app:key="settings.encryption"
+        app:title="@string/encryption">
         <EditTextPreference
             app:icon="@drawable/ic_encryption"
             app:key="encryption.passphrase"
@@ -46,6 +56,7 @@
 
     <PreferenceCategory
         android:summary="@string/online_status_at_the_cost_of_battery_life"
+        app:key="settings.ping"
         app:title="@string/ping">
         <EditTextPreference
             android:key="ping.interval_seconds"
@@ -54,7 +65,9 @@
             app:useSimpleSummaryProvider="true" />
     </PreferenceCategory>
 
-    <PreferenceCategory app:title="@string/logs">
+    <PreferenceCategory
+        app:key="settings.logs"
+        app:title="@string/logs">
         <Preference
             app:fragment="me.capcom.smsgateway.ui.LogsListFragment"
             app:icon="@drawable/ic_logs"
@@ -91,6 +104,17 @@
             app:icon="@drawable/ic_info"
             app:persistent="false"
             app:selectable="false" />
+    </PreferenceCategory>
+
+    <!-- Mnaseb SIM v0.3.0: shown only on an install linked through the account. -->
+    <PreferenceCategory
+        app:isPreferenceVisible="false"
+        app:key="account.category">
+        <Preference
+            app:key="account.unlink"
+            app:persistent="false"
+            app:summary="@string/unlink_summary"
+            app:title="@string/unlink_title" />
     </PreferenceCategory>
 
 </PreferenceScreen>
