@@ -223,7 +223,14 @@ jobs:
           set -euo pipefail
           ls -l dist
           NOTES="Mnaseb SIM $VERSION (com.mnaseb.sim), built from $GITHUB_SHA. APK SHA-256: $(cut -d' ' -f1 dist/*.sha256). Signing certificate SHA-256: ${CERT:-unavailable}. Certificate against the previous release: ${CONTINUITY:-unknown}. Derived from android-sms-gateway (Apache-2.0); see NOTICE."
+          # Release candidates (tags containing "-rc") are prereleases and never become "Latest".
+          # The array is never empty, so expanding it is safe under set -u.
+          case "$GITHUB_REF_NAME" in
+            *-rc*) RELEASE_FLAGS=(--prerelease) ;;
+            *) RELEASE_FLAGS=(--latest) ;;
+          esac
           gh release create "$GITHUB_REF_NAME" dist/*.apk dist/*.sha256 \
             --repo "$GITHUB_REPOSITORY" \
             --title "Mnaseb SIM $VERSION" \
-            --notes "$NOTES"
+            --notes "$NOTES" \
+            "${RELEASE_FLAGS[@]}"
