@@ -341,6 +341,8 @@ class ReceiverService : KoinComponent {
                         text = cursor.getString(3),
                         subscriptionId = when {
                             projection.size > 4 -> cursor.getInt(4).takeIf { it >= 0 }
+                                // some OEMs store the slot index here, not the subscription id
+                                ?.let { SubscriptionsHelper.normalizeProviderSubId(context, it) }
                             else -> null
                         }
                     )

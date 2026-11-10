@@ -9,6 +9,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import android.provider.Telephony
 import androidx.core.content.ContextCompat
+import me.capcom.smsgateway.helpers.SubscriptionsHelper
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.receiver.data.InboxMessage
@@ -163,6 +164,8 @@ class SmsContentObserver : KoinComponent {
                 val body = c.getString(3) ?: ""
                 val subId = if (projection.size > 4) {
                     c.getInt(4).takeIf { it >= 0 }
+                        // some OEMs store the slot index here, not the subscription id
+                        ?.let { SubscriptionsHelper.normalizeProviderSubId(context, it) }
                 } else {
                     null
                 }
