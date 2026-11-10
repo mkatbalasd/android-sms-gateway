@@ -10,18 +10,107 @@ import android.provider.Settings
 import android.text.InputType
 import android.widget.Toast
 import androidx.annotation.RequiresApi
+import androidx.fragment.app.setFragmentResultListener
+import androidx.lifecycle.lifecycleScope
 import androidx.preference.EditTextPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
 import me.capcom.smsgateway.BuildConfig
 import me.capcom.smsgateway.MainActivity
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.helpers.LocaleHelper
+import me.capcom.smsgateway.modules.account.AccountException
+import me.capcom.smsgateway.modules.account.AccountSettings
+import me.capcom.smsgateway.modules.account.AppEnrolled
+import me.capcom.smsgateway.modules.account.AppUnlink
+import me.capcom.smsgateway.modules.gateway.GatewaySettings
+import me.capcom.smsgateway.ui.account.AccountMessages
+import me.capcom.smsgateway.ui.account.UiError
+import me.capcom.smsgateway.ui.dialogs.PasswordPromptDialogFragment
+import org.koin.android.ext.android.inject
+import java.io.IOException
 
 class SettingsFragment : PreferenceFragmentCompat() {
 
+    private val accountSettings: AccountSettings by inject()
+    private val gatewaySettings: GatewaySettings by inject()
+    private val appUnlink: AppUnlink by inject()
+
+    private var unlinking = false
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        // «فصل هذا الهاتف»: the password prompt answers here. Other prompts are not ours.
+        setFragmentResultListener(PasswordPromptDialogFragment.REQUEST_KEY) { _, data ->
+            if (PasswordPromptDialogFragment.getAction(data) != ACTION_UNLINK) {
+                return@setFragmentResultListener
+            }
+            PasswordPromptDialogFragment.getPassword(data)?.let { unlink(it) }
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // The phone may have been linked since this screen was drawn (first run).
+        applyVisibility()
+    }
+
+    // Mnaseb SIM v0.3.0: the customer phone hides the upstream settings (V2-D11).
+    private fun applyVisibility() {
+        val enrolled = AppEnrolled.check(accountSettings, gatewaySettings)
+        val hidden = SettingsVisibility.hiddenKeys(enrolled)
+        SettingsVisibility.allKeys().forEach { key ->
+            findPreference<Preference>(key)?.isVisible = key !in hidden
+        }
+        findPreference<Preference>(SettingsVisibility.UNLINK_CATEGORY)?.isVisible = enrolled
+    }
+
+    private fun askForUnlink() {
+        if (unlinking || parentFragmentManager.findFragmentByTag(UNLINK_PROMPT_TAG) != null) return
+        PasswordPromptDialogFragment.newInstance(
+            message = getString(R.string.unlink_prompt),
+            action = ACTION_UNLINK,
+        ).show(parentFragmentManager, UNLINK_PROMPT_TAG)
+    }
+
+    private fun unlink(password: String) {
+        if (unlinking) return
+        unlinking = true
+        // The activity context carries the chosen language; the application one may not.
+        val ctx = requireContext()
+        viewLifecycleOwner.lifecycleScope.launch {
+            fun say(error: UiError) {
+                Toast.makeText(ctx, AccountMessages.text(ctx, error), Toast.LENGTH_LONG).show()
+            }
+            try {
+                appUnlink.run(password)
+                // Back to the welcome screen: a fresh start of the app.
+                ctx.startActivity(
+                    Intent(ctx, MainActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: AccountException) {
+                unlinking = false
+                say(UiError.from(e.error))
+                // A wrong password may be typed again.
+                if (e.error.code == "INVALID_CREDENTIALS") askForUnlink()
+            } catch (e: IOException) {
+                unlinking = false
+                say(UiError(UiError.NETWORK))
+            } catch (e: Exception) {
+                unlinking = false
+                say(UiError(UiError.GENERIC))
+            }
+        }
+    }
+
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
         setPreferencesFromResource(R.xml.root_preferences, rootKey)
+        applyVisibility()
 
         findPreference<Preference>("transient.app_version")?.summary =
             "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
@@ -74,6 +163,10 @@ class SettingsFragment : PreferenceFragmentCompat() {
             requestIgnoreBatteryOptimizations()
             return true
         }
+        if (preference.key == SettingsVisibility.UNLINK) {
+            askForUnlink()
+            return true
+        }
 
         return super.onPreferenceTreeClick(preference)
     }
@@ -109,6 +202,9 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     companion object {
+        private const val ACTION_UNLINK = "unlink"
+        private const val UNLINK_PROMPT_TAG = "unlink_password"
+
         fun newInstance() = SettingsFragment()
     }
 }

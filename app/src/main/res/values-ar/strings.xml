@@ -403,4 +403,9 @@
     <string name="test_message_still">ما زالت في الطريق. تابعها من تبويب الرسائل.</string>
     <string name="test_message_cap">وصلت إلى حد التجربة اليوم (%1$d)</string>
     <string name="test_message_no_line">تحقق من رقم شريحة أولاً.</string>
+
+    <!-- Settings -->
+    <string name="unlink_title">فصل هذا الهاتف</string>
+    <string name="unlink_summary">يتوقف الإرسال من هذا الهاتف ويُزال من حسابك</string>
+    <string name="unlink_prompt">أدخل كلمة المرور لفصل هذا الهاتف. سيتوقف عن الإرسال.</string>
 </resources>

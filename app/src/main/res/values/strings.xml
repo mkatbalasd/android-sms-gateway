@@ -426,4 +426,9 @@
     <string name="test_message_still">Still on its way. You can follow it in the Messages tab.</string>
     <string name="test_message_cap">You reached today test limit (%1$d)</string>
     <string name="test_message_no_line">Check the number of a SIM first.</string>
+
+    <!-- Settings -->
+    <string name="unlink_title">Unlink this phone</string>
+    <string name="unlink_summary">Stops sending from this phone and removes it from your account</string>
+    <string name="unlink_prompt">Enter your password to unlink this phone. It will stop sending.</string>
 </resources>

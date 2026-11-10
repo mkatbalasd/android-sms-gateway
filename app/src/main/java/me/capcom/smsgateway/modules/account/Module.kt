@@ -24,6 +24,16 @@ val accountModule = module {
     }
     single<AppClient> { AppRepository(get<AppBackend>(), get<AccountRepository>()) }
     factory {
+        AppUnlink(
+            get<Context>(),
+            get<AppClient>(),
+            get<AccountSettings>(),
+            get(),
+            get(),
+            get(),
+        )
+    }
+    factory {
         AppEnrolmentSteps(
             get<Context>(),
             get(),

@@ -14,7 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Mnaseb SIM: the keep-alive guide is a step right after Numbers (once, with "later"); what the keeper ticked is reported to the account
 - Mnaseb SIM: a new home screen for phones linked through the account: business name and mode, whether the phone is working (from the phone's own checks and the server's last contact), the verified numbers, the test counters or the balance, the activation request state, and the test numbers; view only, refreshed once a minute while it is on screen
 - Mnaseb SIM: "Send a test message" to a verified test number with a visible result ("on its way", then "arrived in N s" or the reason), and "Open dashboard" that opens the web workspace signed in (Custom Tab, browser as fallback)
-- Mnaseb SIM: a phone linked through the account gets this home screen; a phone linked by QR or a typed code (the platform phone) keeps the upstream home screen
+- Mnaseb SIM: "Unlink this phone" in Settings; it asks for the password, retires the phone on the platform, stops sending and returns to the welcome screen
+
+### Changed
+- Mnaseb SIM: for a phone linked through the account, Settings shows only the language, the battery exemption, the version and "Unlink this phone"; the upstream screens (device keys, cloud server, messages, inbox, webhooks, encryption, ping, logs) are hidden, not removed. A phone linked by QR or a typed code (the platform phone) keeps every screen and its upstream home screen
 
 ## [0.3.0-rc1] - not tagged yet (the owner tags `mnaseb-sim-v0.3.0-rc1`)
 
