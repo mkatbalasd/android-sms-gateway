@@ -43,33 +43,41 @@ class CloudPasswordScreenTest {
         val settings = GlobalContext.get().get<GatewaySettings>()
         val bus = GlobalContext.get().get<me.capcom.smsgateway.modules.events.EventBus>()
         val previous = settings.registrationInfo
+        val previousEnabled = settings.enabled
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        val expected = context.getString(R.string.signing_key_set)
         try {
             settings.registrationInfo = GatewayApi.DeviceRegisterResponse(
                 id = "test-device", token = "test-token", login = "test-login", password = password
             )
             ActivityScenario.launch(me.capcom.smsgateway.MainActivity::class.java).use { scenario ->
-                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-                Thread.sleep(1000)
-                kotlinx.coroutines.runBlocking {
-                    bus.emit(
-                        me.capcom.smsgateway.modules.gateway.events.DeviceRegisteredEvent.Success(
-                            "https://example.invalid", "test-login", password
+                // The EventBus has no replay: re-emit until the Home collector is
+                // subscribed and the card shows the masked value, or time out.
+                val deadline = System.currentTimeMillis() + 10_000
+                var text: String? = null
+                while (System.currentTimeMillis() < deadline) {
+                    kotlinx.coroutines.runBlocking {
+                        bus.emit(
+                            me.capcom.smsgateway.modules.gateway.events.DeviceRegisteredEvent.Success(
+                                "https://example.invalid", "test-login", password
+                            )
                         )
-                    )
+                    }
+                    InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                    scenario.onActivity {
+                        text = it.window.decorView
+                            .findViewById<TextView>(R.id.textRemotePassword)?.text?.toString()
+                    }
+                    if (text == expected) break
+                    Thread.sleep(250)
                 }
-                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
-                Thread.sleep(1000)
+                assertEquals("Home password card never showed the masked value", expected, text)
                 val rendered = mutableListOf<String>()
-                var found = false
                 scenario.onActivity {
                     val tv = it.window.decorView.findViewById<TextView>(R.id.textRemotePassword)
-                    if (tv != null) {
-                        found = true
-                        assertFalse("selectable", tv.isTextSelectable)
-                    }
+                    assertFalse("selectable", tv.isTextSelectable)
                     collect(it.window.decorView, rendered)
                 }
-                assertTrue("home password row not found", found)
                 for (len in 5..password.length) {
                     for (i in 0..password.length - len) {
                         val part = password.substring(i, i + len)
@@ -79,6 +87,13 @@ class CloudPasswordScreenTest {
             }
         } finally {
             settings.registrationInfo = previous
+            settings.enabled = previousEnabled
+            context.stopService(
+                android.content.Intent(
+                    context,
+                    me.capcom.smsgateway.modules.gateway.services.SSEForegroundService::class.java
+                )
+            )
         }
     }
 
