@@ -183,7 +183,11 @@ class CreateAccountFragment : Fragment() {
         binding.textTerms.text = getText(R.string.account_terms_checkbox)
 
         if (savedInstanceState == null) {
-            binding.editMobile.setText(prefilledNumber(ctx))
+            val prefilled = prefilledNumber(ctx)
+            binding.editMobile.setText(prefilled)
+            if (prefilled.isEmpty()) {
+                binding.layoutMobile.helperText = getString(R.string.account_mobile_empty_hint)
+            }
         }
 
         binding.buttonCreateSubmit.setOnClickListener { submit(viewModel) }

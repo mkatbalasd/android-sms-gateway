@@ -286,12 +286,14 @@ object SubscriptionsHelper {
         subscriptionManager: SubscriptionManager,
         info: android.telephony.SubscriptionInfo,
     ): String? {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        // Android may return the IMSI as the number; keep only a valid mobile number (E.164).
+        val modern = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             runCatching { subscriptionManager.getPhoneNumber(info.subscriptionId) }
                 .getOrNull()
-                ?.takeIf { it.isNotBlank() }
+                ?.let { PhoneHelper.validMobileOrNull(it) }
         } else {
             null
-        } ?: info.number?.takeIf { it.isNotBlank() }
+        }
+        return modern ?: PhoneHelper.validMobileOrNull(info.number)
     }
 }

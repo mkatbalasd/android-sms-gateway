@@ -269,6 +269,7 @@
     <string name="account_create_title">إنشاء حساب لمنشأتك</string>
     <string name="account_hint_business_name">اسم المنشأة</string>
     <string name="account_hint_mobile">رقم الجوال (مع رمز الدولة)</string>
+    <string name="account_mobile_empty_hint">تعذّرت قراءة رقمك من الشريحة. اكتبه مع رمز الدولة، مثل ‎+9677XXXXXXXX</string>
     <string name="account_hint_password">كلمة المرور</string>
     <string name="account_password_rule">١٠ أحرف على الأقل</string>
     <string name="account_terms_checkbox">أوافق على <a href="https://app.mnaseb.com/legal/terms">شروط الاستخدام</a> و<a href="https://app.mnaseb.com/legal/aup">سياسة الاستخدام المقبول</a></string>

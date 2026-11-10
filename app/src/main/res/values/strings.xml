@@ -289,6 +289,7 @@
     <string name="account_create_title">Create an account for your business</string>
     <string name="account_hint_business_name">Business name</string>
     <string name="account_hint_mobile">Mobile number (with country code)</string>
+    <string name="account_mobile_empty_hint">We could not read your number from the SIM. Type it with the country code, for example +9677XXXXXXXX</string>
     <string name="account_hint_password">Password</string>
     <string name="account_password_rule">At least 10 characters</string>
     <string name="account_terms_checkbox">I agree to the <a href="https://app.mnaseb.com/legal/terms">terms of use</a> and the <a href="https://app.mnaseb.com/legal/aup">acceptable use policy</a></string>
