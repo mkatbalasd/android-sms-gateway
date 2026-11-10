@@ -48,7 +48,8 @@ class AppRepository(
 
     override suspend fun handoffUrl(): String {
         val url = account.withSession { api.handoff(it) }.url
-        if (url.isNullOrEmpty() || !url.startsWith("https://")) {
+        // The platform's HANDOFF_URL_BASE (handoff.service.ts): any other host is refused.
+        if (url.isNullOrEmpty() || !url.startsWith(HANDOFF_URL_BASE)) {
             throw AccountException(AccountError("BAD_RESPONSE", 200))
         }
         return url
@@ -60,5 +61,9 @@ class AppRepository(
 
     override suspend fun unlink(password: String) {
         account.withSession { api.unlink(it, password) }
+    }
+
+    private companion object {
+        const val HANDOFF_URL_BASE = "https://app.mnaseb.com/handoff#t="
     }
 }

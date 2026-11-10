@@ -74,7 +74,8 @@ class SimSmsSender(context: Context) : LineSmsSender {
     @Suppress("DEPRECATION")
     private fun managerFor(slot: Int): SmsManager? {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.LOLLIPOP_MR1) {
-            return SmsManager.getDefault()
+            // API 21 cannot choose a SIM: only slot 1 is honest here; a later slot reports a send failure.
+            return if (slot == 1) SmsManager.getDefault() else null
         }
         val subscriptionId = SubscriptionsHelper.getSubscriptionId(
             appContext, SubscriptionsHelper.slotIndexForSimNumber(slot) ?: return null

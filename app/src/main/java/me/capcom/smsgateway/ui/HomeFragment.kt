@@ -50,6 +50,7 @@ import me.capcom.smsgateway.ui.account.AccountActivity
 import me.capcom.smsgateway.ui.account.NumbersActivity
 import me.capcom.smsgateway.ui.dialogs.FirstStartDialogFragment
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
+import me.capcom.smsgateway.ui.settings.CloudPasswordMask
 import org.koin.android.ext.android.inject
 
 class HomeFragment : Fragment() {
@@ -288,7 +289,6 @@ class HomeFragment : Fragment() {
                 binding.textRemoteAddress.text = getString(R.string.address_is, event.server)
 
                 binding.textRemoteUsername.movementMethod = LinkMovementMethod.getInstance()
-                binding.textRemotePassword.movementMethod = LinkMovementMethod.getInstance()
 
                 binding.textRemoteUsername.text = makeCopyableLink(
                     Html
@@ -297,15 +297,14 @@ class HomeFragment : Fragment() {
                         )
                 )
 
-                binding.textRemotePassword.text = when (event.password) {
-                    null -> getString(R.string.password_hidden)
-                    else -> makeCopyableLink(
-                        Html
-                            .fromHtml(
-                                "<a href>${event.password}</a>"
-                            )
-                    )
-                }
+                // The password is never rendered or copyable: masked plain text only.
+                binding.textRemotePassword.text = CloudPasswordMask.summary(
+                    registered = true,
+                    hasPassword = event.password != null,
+                    notRegisteredText = getString(R.string.not_registered),
+                    setText = getString(R.string.signing_key_set),
+                    hiddenText = getString(R.string.password_hidden),
+                )
 
                 // Set Cloud Server Device ID
                 binding.textRemoteDeviceId.text = gatewaySettings.deviceId?.let {
