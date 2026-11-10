@@ -71,12 +71,15 @@ class CloudServerSettingsFragment : BasePreferenceFragment() {
         findPreference<EditTextPreference>("gateway.password")?.apply {
             isEnabled = settings.username != null
 
+            // The password must never be rendered: masked summary only.
             setSummaryProvider {
-                when {
-                    settings.username == null -> getString(R.string.not_registered)
-                    !settings.hasPassword -> getString(R.string.password_hidden)
-                    else -> settings.password
-                }
+                CloudPasswordMask.summary(
+                    registered = settings.username != null,
+                    hasPassword = settings.hasPassword,
+                    notRegisteredText = getString(R.string.not_registered),
+                    setText = getString(R.string.signing_key_set),
+                    hiddenText = getString(R.string.password_hidden),
+                )
             }
 
             setOnPreferenceChangeListener { _, newValue ->
@@ -297,8 +300,20 @@ class CloudServerSettingsFragment : BasePreferenceFragment() {
 
         if (preference.key == "gateway.password") {
             (preference as EditTextPreference).setOnBindEditTextListener {
-                it.inputType = InputType.TYPE_CLASS_TEXT
+                it.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
                 it.text = null
+                // Block copy/cut and selection handles on the password field.
+                val noActions = object : android.view.ActionMode.Callback {
+                    override fun onCreateActionMode(mode: android.view.ActionMode?, menu: android.view.Menu?) = false
+                    override fun onPrepareActionMode(mode: android.view.ActionMode?, menu: android.view.Menu?) = false
+                    override fun onActionItemClicked(mode: android.view.ActionMode?, item: android.view.MenuItem?) = false
+                    override fun onDestroyActionMode(mode: android.view.ActionMode?) = Unit
+                }
+                it.customSelectionActionModeCallback = noActions
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    it.customInsertionActionModeCallback = noActions
+                }
+                it.isLongClickable = false
             }
         }
 
