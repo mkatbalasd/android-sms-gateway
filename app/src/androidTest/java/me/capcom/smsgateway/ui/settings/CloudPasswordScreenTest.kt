@@ -39,6 +39,50 @@ class CloudPasswordScreenTest {
     }
 
     @Test
+    fun homeCardNeverRendersThePassword() {
+        val settings = GlobalContext.get().get<GatewaySettings>()
+        val bus = GlobalContext.get().get<me.capcom.smsgateway.modules.events.EventBus>()
+        val previous = settings.registrationInfo
+        try {
+            settings.registrationInfo = GatewayApi.DeviceRegisterResponse(
+                id = "test-device", token = "test-token", login = "test-login", password = password
+            )
+            ActivityScenario.launch(me.capcom.smsgateway.MainActivity::class.java).use { scenario ->
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                Thread.sleep(1000)
+                kotlinx.coroutines.runBlocking {
+                    bus.emit(
+                        me.capcom.smsgateway.modules.gateway.events.DeviceRegisteredEvent.Success(
+                            "https://example.invalid", "test-login", password
+                        )
+                    )
+                }
+                InstrumentationRegistry.getInstrumentation().waitForIdleSync()
+                Thread.sleep(1000)
+                val rendered = mutableListOf<String>()
+                var found = false
+                scenario.onActivity {
+                    val tv = it.window.decorView.findViewById<TextView>(R.id.textRemotePassword)
+                    if (tv != null) {
+                        found = true
+                        assertFalse("selectable", tv.isTextSelectable)
+                    }
+                    collect(it.window.decorView, rendered)
+                }
+                assertTrue("home password row not found", found)
+                for (len in 5..password.length) {
+                    for (i in 0..password.length - len) {
+                        val part = password.substring(i, i + len)
+                        rendered.forEach { r -> assertFalse("leaked '$part' in '$r'", r.contains(part)) }
+                    }
+                }
+            }
+        } finally {
+            settings.registrationInfo = previous
+        }
+    }
+
+    @Test
     fun passwordIsNeverRenderedAndDialogIsNotCopyable() {
         val settings = GlobalContext.get().get<GatewaySettings>()
         val previous = settings.registrationInfo
@@ -72,6 +116,7 @@ class CloudPasswordScreenTest {
                     collect(fragment.requireView(), rendered)
                     val pref = fragment.findPreference<EditTextPreference>("gateway.password")
                     assertEquals(setText, pref?.summary?.toString())
+                    assertFalse("copying enabled", pref!!.isCopyingEnabled)
                 }
                 assertTrue("password row not rendered", rendered.contains(setText))
                 assertNoLeak(rendered)
@@ -101,10 +146,12 @@ class CloudPasswordScreenTest {
                         edit.customSelectionActionModeCallback!!
                             .onCreateActionMode(null, null)
                     )
-                    assertFalse(
-                        edit.customInsertionActionModeCallback!!
-                            .onCreateActionMode(null, null)
-                    )
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                        assertFalse(
+                            edit.customInsertionActionModeCallback!!
+                                .onCreateActionMode(null, null)
+                        )
+                    }
                     val dialogTexts = mutableListOf<String>()
                     collect(dialog.dialog!!.window!!.decorView, dialogTexts)
                     assertNoLeak(dialogTexts)

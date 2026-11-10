@@ -310,7 +310,9 @@ class CloudServerSettingsFragment : BasePreferenceFragment() {
                     override fun onDestroyActionMode(mode: android.view.ActionMode?) = Unit
                 }
                 it.customSelectionActionModeCallback = noActions
-                it.customInsertionActionModeCallback = noActions
+                if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.M) {
+                    it.customInsertionActionModeCallback = noActions
+                }
                 it.isLongClickable = false
             }
         }
