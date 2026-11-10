@@ -91,10 +91,9 @@ class NumbersFragment : Fragment() {
         }
         item.checkSlot.isEnabled = !row.busy && !row.verified
 
-        val readable = row.readableNumber?.takeIf { it.isNotBlank() }
         item.textSlotHint.text = when {
             row.verified -> getString(R.string.numbers_verified_number, row.verifiedMasked.orEmpty())
-            readable != null -> getString(R.string.numbers_number_ends, readable.filter { it.isDigit() }.takeLast(3))
+            // Only a number the carrier asserted (verified) is shown; never a SIM-reported hint.
             else -> getString(R.string.numbers_number_unknown)
         }
 
