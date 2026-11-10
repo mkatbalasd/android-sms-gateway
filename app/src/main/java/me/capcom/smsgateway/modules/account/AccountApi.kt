@@ -7,12 +7,13 @@ import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
 import io.ktor.client.plugins.HttpTimeout
 import io.ktor.client.request.header
-import io.ktor.client.request.post
+import io.ktor.client.request.request
 import io.ktor.client.request.setBody
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpMethod
 import io.ktor.http.content.TextContent
 import io.ktor.http.isSuccess
 
@@ -38,6 +39,27 @@ interface AccountBackend {
 }
 
 /**
+ * The app routes after linking (CARD-12). Every call carries the app bearer
+ * [access]; the repository refreshes the session around them.
+ */
+interface AppBackend {
+    suspend fun verifyLine(access: String, request: LineVerifyRequest): LineVerifyStart
+    suspend fun lines(access: String): AppLines
+    suspend fun home(access: String): AppHome
+    suspend fun testRecipients(access: String): TestRecipients
+    suspend fun sendTestMessage(
+        access: String,
+        idempotencyKey: String,
+        request: TestMessageRequest,
+    ): MessageView
+
+    suspend fun message(access: String, id: String): MessageView
+    suspend fun handoff(access: String): HandoffResponse
+    suspend fun keepAlive(access: String, checklist: KeepAliveChecklist)
+    suspend fun unlink(access: String, password: String)
+}
+
+/**
  * Ktor client for https://api.mnaseb.com/v1. JSON in and out, 15 s timeouts.
  * `Authorization: Bearer` is sent on the app routes only (enrolment); sign-up,
  * login and refresh carry none. Bodies are serialised here with Gson so the
@@ -46,7 +68,7 @@ interface AccountBackend {
 class AccountApi(
     private val baseUrl: String = DEFAULT_BASE_URL,
     engine: HttpClientEngine? = null,
-) : AccountBackend {
+) : AccountBackend, AppBackend {
 
     private val gson = Gson()
 
@@ -100,12 +122,64 @@ class AccountApi(
         send("/app/enrolment/complete", request, access)
     }
 
-    private suspend fun send(path: String, body: Any?, bearer: String?): String {
-        val response: HttpResponse = client.post(baseUrl + path) {
+    //region App routes (CARD-12)
+
+    override suspend fun verifyLine(access: String, request: LineVerifyRequest): LineVerifyStart =
+        parse(send("/app/lines/verify", request, access))
+
+    override suspend fun lines(access: String): AppLines =
+        parse(send("/app/lines", null, access, HttpMethod.Get))
+
+    override suspend fun home(access: String): AppHome =
+        parse(send("/app/home", null, access, HttpMethod.Get))
+
+    override suspend fun testRecipients(access: String): TestRecipients =
+        parse(send("/app/test-recipients", null, access, HttpMethod.Get))
+
+    override suspend fun sendTestMessage(
+        access: String,
+        idempotencyKey: String,
+        request: TestMessageRequest,
+    ): MessageView = parse(
+        send(
+            "/app/test-message", request, access,
+            extraHeaders = mapOf(IDEMPOTENCY_HEADER to idempotencyKey)
+        )
+    )
+
+    override suspend fun message(access: String, id: String): MessageView {
+        // The id comes from the platform; anything but a plain id never reaches a path.
+        if (!ID_PATTERN.matches(id)) throw AccountException(AccountError("BAD_RESPONSE", 200))
+        return parse(send("/app/messages/$id", null, access, HttpMethod.Get))
+    }
+
+    override suspend fun handoff(access: String): HandoffResponse =
+        parse(send("/app/handoff", null, access))
+
+    override suspend fun keepAlive(access: String, checklist: KeepAliveChecklist) {
+        send("/app/device", KeepAliveRequest(checklist), access, HttpMethod.Patch)
+    }
+
+    override suspend fun unlink(access: String, password: String) {
+        send("/app/unlink", UnlinkRequest(password), access)
+    }
+
+    //endregion
+
+    private suspend fun send(
+        path: String,
+        body: Any?,
+        bearer: String?,
+        method: HttpMethod = HttpMethod.Post,
+        extraHeaders: Map<String, String> = emptyMap(),
+    ): String {
+        val response: HttpResponse = client.request(baseUrl + path) {
+            this.method = method
             header(HttpHeaders.Accept, "application/json")
             if (bearer != null) {
                 header(HttpHeaders.Authorization, "Bearer $bearer")
             }
+            extraHeaders.forEach { (name, value) -> header(name, value) }
             if (body != null) {
                 setBody(TextContent(gson.toJson(body), ContentType.Application.Json))
             }
@@ -162,5 +236,7 @@ class AccountApi(
     companion object {
         const val DEFAULT_BASE_URL = "https://api.mnaseb.com/v1"
         private const val TIMEOUT_MS = 15_000L
+        const val IDEMPOTENCY_HEADER = "X-Idempotency-Key"
+        private val ID_PATTERN = Regex("^[0-9A-Za-z-]{1,64}$")
     }
 }

@@ -347,4 +347,83 @@
     <string name="account_home_linked_test">Linked ✓ — Test mode</string>
     <string name="account_home_linked">Linked ✓</string>
     <string name="account_home_status">This phone is linked to the account %1$s. Keep the app running so it can receive your messages.</string>
+
+    <!-- Mnaseb SIM v0.3.0 (CARD-12): errors of the app routes -->
+    <string name="account_err_wrong_password">The password is not right.</string>
+    <string name="account_err_owner_only">Only the account owner can do this.</string>
+    <string name="account_err_daily_limit">The test limit for today was reached.</string>
+    <string name="account_err_no_platform_line">There is no Mnaseb line for your country yet. Type the number of this SIM to check it by itself.</string>
+    <string name="account_err_number_held">This number is already used by another account.</string>
+    <string name="account_err_proof_open">A check for this SIM is already running. Wait a moment.</string>
+
+    <!-- Numbers (F1-6) -->
+    <string name="numbers_title_none">No SIM found in this phone</string>
+    <string name="numbers_title_one">We found a SIM in this phone</string>
+    <string name="numbers_title_many">We found %1$d SIMs in this phone</string>
+    <string name="numbers_no_sim">Insert a SIM card and open the app again. Without a SIM the phone cannot send.</string>
+    <string name="numbers_carrier_unknown">Unknown carrier</string>
+    <string name="numbers_slot_title">SIM %1$d · %2$s</string>
+    <string name="numbers_number_ends">The number ends in %1$s</string>
+    <string name="numbers_number_unknown">The number is unknown</string>
+    <string name="numbers_verified_number">%1$s</string>
+    <string name="numbers_type_number">Number of this SIM (international format)</string>
+    <string name="numbers_cost_note">To check, the phone sends one message from each SIM to a Mnaseb line (at the cost of one message).</string>
+    <string name="numbers_verify_now">Check now</string>
+    <string name="numbers_continue">Continue</string>
+    <string name="numbers_skip">Later</string>
+    <string name="numbers_status_sending">The phone is sending the check message…</string>
+    <string name="numbers_status_waiting">Waiting for the check message to arrive…</string>
+    <string name="numbers_status_verified">Verified ✓</string>
+    <string name="numbers_status_verified_weak">Verified ✓ · self check (weaker)</string>
+    <string name="numbers_status_send_failed">The check message was not sent. Make sure the SIM has credit.</string>
+    <string name="numbers_status_timeout">Timed out. Try again.</string>
+    <string name="numbers_status_needs_number">Type the number of this SIM, then check again. It will be checked by a message to itself (weaker).</string>
+
+    <!-- Home (F1-8) -->
+    <string name="home_mode_test">Test mode</string>
+    <string name="home_mode_live">Live sending on</string>
+    <string name="home_status_checking">Checking the phone…</string>
+    <string name="home_status_working_now">Working ✓ · connected now</string>
+    <string name="home_status_working_ago">Working · last connection %1$d min ago</string>
+    <string name="home_status_stopped">Stopped · open the app and start the service</string>
+    <string name="home_status_stopped_permission">Stopped · allow the SMS permission</string>
+    <string name="home_status_stopped_sim">Stopped · no SIM card found</string>
+    <string name="home_status_offline">The phone is not connecting</string>
+    <string name="home_start_service">Start</string>
+    <string name="home_keep_alive_left">Keep the phone alive: %1$d steps left ›</string>
+    <string name="home_keep_alive_waiting">Keep the phone alive: waiting for a full night of connection ›</string>
+    <string name="home_numbers">Numbers</string>
+    <string name="home_number_ready">%1$s · ready to send</string>
+    <string name="home_number_not_ready">%1$s · not verified</string>
+    <string name="home_no_numbers">No verified number yet.</string>
+    <string name="home_verify_numbers">Check my numbers</string>
+    <string name="home_counters_test">Test is free · sent today %1$d · limit %2$d</string>
+    <string name="home_counters_test_nolimit">Test is free · sent today %1$d</string>
+    <string name="home_counters_live">Balance %1$s · sent today %2$d</string>
+    <string name="home_send_test">Send a test message</string>
+    <string name="home_open_dashboard">Open dashboard</string>
+    <string name="home_no_browser">No browser was found on this phone.</string>
+    <string name="home_approval_start">Turn on live sending ›</string>
+    <string name="home_approval_review">Your activation request is under review ›</string>
+    <string name="home_approval_needs_info">We need more information for your activation request ›</string>
+    <string name="home_approval_rejected">The activation request was not accepted. Open the dashboard for details ›</string>
+    <string name="home_test_numbers">Test numbers %1$d of %2$d ›</string>
+    <string name="home_extra_phone">Another phone? Install the app and sign in.</string>
+
+    <!-- Test message (F1-9) -->
+    <string name="test_message_title">Send a test message</string>
+    <string name="test_message_to">To</string>
+    <string name="test_message_text">Message</string>
+    <string name="test_message_default">Test message from Mnaseb</string>
+    <string name="test_message_send">Send</string>
+    <string name="test_message_close">Close</string>
+    <string name="test_message_no_recipients">No verified test number yet. Add one from the dashboard.</string>
+    <string name="test_message_on_its_way">On its way…</string>
+    <string name="test_message_arrived">Arrived ✓ in %1$d s</string>
+    <string name="test_message_failed">The message did not arrive. Check the SIM credit and that the phone is connected.</string>
+    <string name="test_message_expired">The message expired because the phone did not pick it up. Open the app and try again.</string>
+    <string name="test_message_unknown">We do not know yet if the message arrived. Do not send it again now.</string>
+    <string name="test_message_still">Still on its way. You can follow it in the Messages tab.</string>
+    <string name="test_message_cap">You reached today test limit (%1$d)</string>
+    <string name="test_message_no_line">Check the number of a SIM first.</string>
 </resources>

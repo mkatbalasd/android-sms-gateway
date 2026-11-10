@@ -8,7 +8,9 @@ import org.koin.dsl.module
 val accountModule = module {
     // One encrypted store, opened once.
     single { AccountSettings(AccountStorageFactory.create(get<Context>())) }
-    single<AccountBackend> { AccountApi() }
+    single { AccountApi() }
+    single<AccountBackend> { get<AccountApi>() }
+    single<AppBackend> { get<AccountApi>() }
     single {
         AccountRepository(
             get<AccountBackend>(),
@@ -20,6 +22,7 @@ val accountModule = module {
             ),
         )
     }
+    single<AppClient> { AppRepository(get<AppBackend>(), get<AccountRepository>()) }
     factory {
         AppEnrolmentSteps(
             get<Context>(),
