@@ -1,17 +1,27 @@
 package me.capcom.smsgateway.helpers
 
+import android.os.SystemClock
 import android.util.Log
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancelChildren
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.Interceptor
+import okhttp3.MediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.Response
+import okhttp3.ResponseBody
 import okhttp3.sse.EventSource
 import okhttp3.sse.EventSourceListener
 import okhttp3.sse.EventSources
+import okio.Buffer
+import okio.BufferedSource
+import okio.ForwardingSource
+import okio.buffer
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -19,10 +29,25 @@ class SSEManager(
     private val url: String,
     private val tokenProvider: () -> String?,
 ) {
+    // Silence detector (CARD V2-L19): the read timeout below is 1 h, so a half-open
+    // connection raises no error for an hour. Every byte read from the stream counts as
+    // activity, including keep-alive comment lines that okhttp-sse never surfaces.
+    private val watchdog = SseWatchdog(clock = { SystemClock.elapsedRealtime() })
+
     private val client = OkHttpClient.Builder()
         .readTimeout(1, TimeUnit.HOURS)
+        .addInterceptor(Interceptor { chain ->
+            val response = chain.proceed(chain.request())
+            val body = response.body ?: return@Interceptor response
+            response.newBuilder()
+                .body(ActivityBody(body) { watchdog.onActivity() })
+                .build()
+        })
         .build()
     private val scope = CoroutineScope(Dispatchers.IO + Job())
+
+    @Volatile
+    private var watchdogJob: Job? = null
 
     @Volatile
     private var eventSource: EventSource? = null
@@ -50,9 +75,17 @@ class SSEManager(
     var onError: ((Throwable?) -> Unit)? = null
     var onClosed: (() -> Unit)? = null
 
+    // The stream has been quiet for over a minute: the owner pulls the pending messages.
+    var onSilent: (() -> Unit)? = null
+
+    // The watchdog gave up on a silent stream and is reconnecting it.
+    var onWatchdogReconnect: ((silentSeconds: Long) -> Unit)? = null
+
     fun connect() {
         isDisconnecting.set(false)
         val token = tokenProvider() ?: return disconnect()
+
+        startWatchdog()
 
         synchronized(lock) {
             // Exactly one live stream: reuse the running one for the same credentials.
@@ -75,6 +108,7 @@ class SSEManager(
                         override fun onOpen(eventSource: EventSource, response: Response) {
                             if (isDisconnecting.get() || !active.get()) return
                             Log.d(TAG, "SSE connected")
+                            watchdog.onActivity()
                             reconnectAttempts = 0
                             onConnected?.invoke()
                         }
@@ -87,6 +121,7 @@ class SSEManager(
                         ) {
                             if (isDisconnecting.get() || !active.get()) return
                             Log.d(TAG, "Event received: $type - $data")
+                            watchdog.onActivity()
                             onEvent?.invoke(type, data)
                         }
 
@@ -176,16 +211,76 @@ class SSEManager(
         source?.cancel()
     }
 
-    private fun scheduleReconnect(active: AtomicBoolean) {
+    /**
+     * The network came back (or changed): replace the live stream now, without the backoff.
+     * Without a live stream a reconnect is already pending, so it is only hurried up.
+     * The pending-messages pull follows from the new stream's onConnected.
+     */
+    fun reconnectNow() {
+        if (isDisconnecting.get() || tokenProvider() == null) return
+
+        val active = synchronized(lock) { connection?.takeIf { it.get() } }
+        if (active != null) {
+            Log.i(TAG, "Network available, restarting the SSE stream")
+            scheduleReconnect(active, immediate = true)
+        } else {
+            reconnectAttempts = 0
+            connect()
+        }
+    }
+
+    private fun startWatchdog() {
+        synchronized(lock) {
+            if (watchdogJob?.isActive == true) return
+            watchdog.onActivity()
+            watchdogJob = scope.launch {
+                while (isActive) {
+                    delay(SseWatchdog.TICK_MS)
+                    if (isDisconnecting.get()) return@launch
+                    // A failing callback must not cancel the scope's Job: that would
+                    // stop every later reconnect too.
+                    try {
+                        when (watchdog.check()) {
+                            SseWatchdog.Action.NONE -> {}
+                            SseWatchdog.Action.PULL -> onSilent?.invoke()
+                            SseWatchdog.Action.RECONNECT -> {
+                                // Only a live stream is replaced, and the new stream's
+                                // onConnected pulls. Without a live stream a reconnect is
+                                // already scheduled and keeps its backoff: just pull.
+                                val live = synchronized(lock) { connection?.takeIf { it.get() } }
+                                if (live != null) {
+                                    Log.w(TAG, "SSE silent, reconnecting (watchdog)")
+                                    onWatchdogReconnect?.invoke(SseWatchdog.WATCHDOG_SILENCE_MS / 1000)
+                                    scheduleReconnect(live)
+                                } else {
+                                    onSilent?.invoke()
+                                }
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Watchdog tick failed", e)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun scheduleReconnect(active: AtomicBoolean, immediate: Boolean = false) {
         if (isDisconnecting.get()) {
             return
         }
 
-        reconnectAttempts++
-        val delay = when {
-            reconnectAttempts > 10 -> 60_000L  // 1 minute
-            reconnectAttempts > 5 -> 30_000L   // 30 seconds
-            else -> 5_000L                     // 5 seconds
+        val delay = if (immediate) {
+            0L
+        } else {
+            reconnectAttempts++
+            when {
+                reconnectAttempts > 10 -> 60_000L  // 1 minute
+                reconnectAttempts > 5 -> 30_000L   // 30 seconds
+                else -> 5_000L                     // 5 seconds
+            }
         }
 
         scope.launch {
@@ -206,6 +301,28 @@ class SSEManager(
             if (isDisconnecting.get()) return@launch
             connect()
         }
+    }
+
+    /** Reports every read that returned bytes, so a quiet stream is told from a dead one. */
+    private class ActivityBody(
+        private val delegate: ResponseBody,
+        private val onBytes: () -> Unit,
+    ) : ResponseBody() {
+        private val wrapped: BufferedSource by lazy {
+            object : ForwardingSource(delegate.source()) {
+                override fun read(sink: Buffer, byteCount: Long): Long {
+                    val read = super.read(sink, byteCount)
+                    if (read > 0) onBytes()
+                    return read
+                }
+            }.buffer()
+        }
+
+        override fun contentType(): MediaType? = delegate.contentType()
+
+        override fun contentLength(): Long = delegate.contentLength()
+
+        override fun source(): BufferedSource = wrapped
     }
 
     companion object {
