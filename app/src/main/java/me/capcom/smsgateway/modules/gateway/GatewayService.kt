@@ -171,6 +171,7 @@ class GatewayService(
 
             this.settings.fcmToken = pushToken
             this.settings.registrationInfo = response
+            this.settings.recordContact()
 
             events.emit(
                 DeviceRegisteredEvent.Success(
@@ -211,6 +212,7 @@ class GatewayService(
         )
 
         this.settings.fcmToken = pushToken
+        this.settings.recordContact()
 
         events.emit(
             DeviceRegisteredEvent.Success(
@@ -247,6 +249,7 @@ class GatewayService(
             MessagesSettings.ProcessingOrder.FIFO -> GatewayApi.ProcessingOrder.FIFO
         }
         val messages = api.getMessages(settings.token, processingOrder)
+        this.settings.recordContact()
         for (message in messages) {
             try {
                 processMessage(context, message)
@@ -377,7 +380,7 @@ class GatewayService(
     internal suspend fun getSettings(): Map<String, *>? {
         val settings = settings.registrationInfo ?: return null
 
-        return api.getSettings(settings.token)
+        return api.getSettings(settings.token).also { this.settings.recordContact() }
     }
     //endregion
 

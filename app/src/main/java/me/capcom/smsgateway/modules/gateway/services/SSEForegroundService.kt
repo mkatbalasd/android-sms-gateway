@@ -51,6 +51,7 @@ class SSEForegroundService : Service() {
         )
             .apply {
                 onConnected = {
+                    settings.recordContact()
                     Log.d("SSEForegroundService", "SSE connected, pulling pending messages")
                     try {
                         PullMessagesWorker.start(this@SSEForegroundService)
@@ -64,6 +65,7 @@ class SSEForegroundService : Service() {
                     }
                 }
                 onEvent = { event, data ->
+                    settings.recordContact()
                     Log.d("SSEForegroundService", "$event: $data")
 
                     try {

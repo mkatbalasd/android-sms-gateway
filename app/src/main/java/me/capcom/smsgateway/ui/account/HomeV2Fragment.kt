@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -24,9 +25,13 @@ import me.capcom.smsgateway.modules.account.AccountException
 import me.capcom.smsgateway.modules.account.AccountSettings
 import me.capcom.smsgateway.modules.account.AppClient
 import me.capcom.smsgateway.modules.account.AppHome
+import me.capcom.smsgateway.modules.account.DeviceReattach
+import me.capcom.smsgateway.modules.account.ReattachOutcome
 import me.capcom.smsgateway.modules.account.KeepAliveChecklist
 import me.capcom.smsgateway.modules.gateway.GatewayService
+import me.capcom.smsgateway.modules.gateway.GatewaySettings
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
+import me.capcom.smsgateway.modules.ping.PingSettings
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
 import org.koin.android.ext.android.inject
 import java.io.IOException
@@ -47,8 +52,26 @@ class HomeV2Fragment : Fragment() {
     private val gatewaySvc: GatewayService by inject()
     private val orchestratorSvc: OrchestratorService by inject()
 
+    private val gatewaySettings: GatewaySettings by inject()
+    private val pingSettings: PingSettings by inject()
+    private val reattach: DeviceReattach by inject()
+    private var reattachError: String? = null
+    private var reattachBusy = false
+
     private var home: AppHome? = null
     private var homeFailed = false
+    private var homeErrorCode: String? = null
+
+    // A linked phone with no app session signs in again here; the gateway link stays as it is.
+    private val signInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == AccountActivity.RESULT_SIGNED_IN) {
+            homeErrorCode = null
+            startPolling()
+        }
+        render()
+    }
     private var serviceRunning = false
     private var pollJob: Job? = null
     private var handoffBusy = false
@@ -72,6 +95,15 @@ class HomeV2Fragment : Fragment() {
             startActivity(NumbersActivity.starter(requireContext()))
         }
         binding.cardHomeKeepAlive.setOnClickListener { showKeepAliveGuide() }
+        binding.buttonHomeReattach.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                reattachIfPending()
+                refresh()
+            }
+        }
+        binding.buttonHomeSignIn.setOnClickListener {
+            signInLauncher.launch(AccountActivity.starter(requireContext()))
+        }
         binding.buttonHomeStart.setOnClickListener {
             orchestratorSvc.start(requireContext().applicationContext, false)
         }
@@ -106,6 +138,9 @@ class HomeV2Fragment : Fragment() {
         pollJob?.cancel()
         pollJob = viewLifecycleOwner.lifecycleScope.launch {
             while (isActive) {
+                // After a sign-in again the new session is tied to this phone first.
+                // (A failed attempt waits for the retry button instead of repeating each minute.)
+                if (reattachError == null) reattachIfPending()
                 refresh()
                 reportKeepAlive()
                 delay(POLL_MS)
@@ -113,14 +148,33 @@ class HomeV2Fragment : Fragment() {
         }
     }
 
+    /** Never unlinks and never enrols: a failure keeps the link and shows a retry. */
+    private suspend fun reattachIfPending() {
+        if (!accountSettings.linked || !accountSettings.hasSession || !accountSettings.reattachPending) {
+            reattachError = null
+            return
+        }
+        if (reattachBusy) return
+        reattachBusy = true
+        try {
+            val outcome = reattach.run()
+            reattachError = (outcome as? ReattachOutcome.Failed)?.code
+        } finally {
+            reattachBusy = false
+            render()
+        }
+    }
+
     private suspend fun refresh() {
         try {
             home = client.home()
             homeFailed = false
+            homeErrorCode = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: AccountException) {
             homeFailed = true
+            homeErrorCode = e.error.code
         } catch (e: IOException) {
             homeFailed = true
         } catch (e: Exception) {
@@ -207,17 +261,38 @@ class HomeV2Fragment : Fragment() {
     }
 
     private fun renderStatus(b: FragmentHomeV2Binding, data: AppHome?) {
-        if (data == null && !homeFailed) {
-            b.textHomeStatus.setText(R.string.home_status_checking)
-            b.buttonHomeStart.isVisible = false
-            return
-        }
+        // The session line is separate from the connection line: a revoked app session says
+        // «سجّل الدخول من جديد» and never makes the phone «لا يتصل».
+        val signIn = HomeStatus.sessionNeedsSignIn(
+            accountSettings.linked, accountSettings.hasSession, homeErrorCode
+        )
+        // Signed in again but not yet tied to this phone on the platform: a clear message
+        // and a retry; the gateway link is untouched either way.
+        val needsReattach = !signIn && reattachError != null && HomeStatus.sessionNeedsReattach(
+            accountSettings.linked, accountSettings.hasSession, homeErrorCode,
+            accountSettings.reattachPending
+        )
+        b.textHomeSession.isVisible = signIn || needsReattach
+        b.textHomeSession.setText(
+            when {
+                signIn -> R.string.home_session_ended
+                reattachError == DeviceReattach.DEVICE_NOT_FOUND -> R.string.home_reattach_not_found
+                else -> R.string.home_reattach_failed
+            }
+        )
+        b.buttonHomeSignIn.isVisible = signIn
+        b.buttonHomeReattach.isVisible = needsReattach
+
+        // The connection line is the gateway's own last contact, not the app session.
         val status = HomeStatus.phoneStatus(
-            localChecks(), HomeStatus.lastSeenMs(data), System.currentTimeMillis()
+            localChecks(),
+            gatewaySettings.lastContactAtMs,
+            System.currentTimeMillis(),
+            pingSettings.intervalSeconds,
         )
         b.textHomeStatus.text = when (status) {
             is PhoneStatus.Working ->
-                if (status.agoMinutes <= 0) getString(R.string.home_status_working_now)
+                if (status.agoMinutes == null) getString(R.string.home_status_working)
                 else getString(R.string.home_status_working_ago, status.agoMinutes)
 
             is PhoneStatus.Stopped -> getString(

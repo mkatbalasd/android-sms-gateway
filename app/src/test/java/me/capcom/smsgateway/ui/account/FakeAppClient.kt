@@ -6,6 +6,8 @@ import me.capcom.smsgateway.modules.account.AppLine
 import me.capcom.smsgateway.modules.account.KeepAliveChecklist
 import me.capcom.smsgateway.modules.account.LineVerifyStart
 import me.capcom.smsgateway.modules.account.MessageView
+import me.capcom.smsgateway.modules.account.ReattachChallenge
+import me.capcom.smsgateway.modules.account.ReattachResult
 import me.capcom.smsgateway.modules.account.TestRecipient
 
 /** A scripted platform: answers are queued, calls are recorded. */
@@ -46,6 +48,21 @@ internal class FakeAppClient : AppClient {
     override suspend fun handoffUrl(): String = error("handoff not scripted")
 
     override suspend fun keepAlive(checklist: KeepAliveChecklist) = Unit
+
+    var challengeAnswer: () -> ReattachChallenge = { error("reattachChallenge not scripted") }
+    var reattachAnswer: () -> ReattachResult = { error("reattach not scripted") }
+    val challengeCalls = mutableListOf<String>()
+    val reattachCalls = mutableListOf<Pair<String, String>>()
+
+    override suspend fun reattachChallenge(externalDeviceId: String): ReattachChallenge {
+        challengeCalls.add(externalDeviceId)
+        return challengeAnswer()
+    }
+
+    override suspend fun reattach(challengeId: String, nonce: String): ReattachResult {
+        reattachCalls.add(challengeId to nonce)
+        return reattachAnswer()
+    }
 
     var unlinkAnswer: () -> Unit = {}
     val unlinkCalls = mutableListOf<String>()
