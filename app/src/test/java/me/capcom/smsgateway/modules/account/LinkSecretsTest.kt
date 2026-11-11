@@ -41,6 +41,18 @@ class LinkSecretsTest {
     }
 
     @Test
+    fun theCredentialEncryptedRollbackCopyLosesTheSameKeysAndTheRegistration() {
+        // a downgrade after unlink + relink must not bring the old token, password or
+        // signing key back from the copy the migration left in credential-encrypted storage
+        val removed = mutableListOf<String>()
+        LinkSecrets.forgetInRollbackCopy { removed += it }
+        assertEquals(
+            LinkSecrets.PREFERENCE_KEYS + "gateway.REGISTRATION_INFO",
+            removed
+        )
+    }
+
+    @Test
     fun payloadFilesOfTheOldLinkAreDeletedFromBothDirectories() {
         val de = tmp.newFolder("de")
         val ce = tmp.newFolder("ce")

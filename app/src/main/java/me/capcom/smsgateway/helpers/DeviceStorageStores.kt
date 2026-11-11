@@ -36,6 +36,8 @@ object DeviceStorageStores {
     ) : DeviceStorageMigration.Store {
         override fun hasSource(): Boolean = names.any { File(ceDir, it).exists() }
 
+        override fun cleanLeftovers() = AtomicFileSet.deleteLeftovers(deDir)
+
         override fun copy() {
             AtomicFileSet.copy(
                 sources = names.map { File(ceDir, it) },

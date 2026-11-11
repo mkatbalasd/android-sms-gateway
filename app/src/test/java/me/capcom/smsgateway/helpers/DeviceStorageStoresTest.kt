@@ -87,6 +87,23 @@ class DeviceStorageStoresTest {
     }
 
     @Test
+    fun leftoverTemporaryCopiesOfAKilledAttemptAreDeletedAtTheStart() {
+        setUp()
+        // a kill left an unscrubbed temporary copy of the preferences in the destination
+        dePrefs.mkdirs()
+        File(dePrefs, "app_preferences.xml.mnaseb-tmp").writeText("password here")
+        File(dePrefs, "mnaseb_device_storage.xml").writeText("flag file of another store: keep")
+        deDb.mkdirs()
+        File(deDb, "gateway.mnaseb-tmp").writeText("half a db")
+        File(ceDb, "gateway").writeText("db")
+
+        assertEquals(Result.DONE, migration().run())
+
+        assertEquals(setOf("mnaseb_device_storage.xml"), names(dePrefs))
+        assertEquals(setOf("gateway"), names(deDb))
+    }
+
+    @Test
     fun aFreshInstallHasNothingToCopyAndStillWritesTheFlag() {
         setUp()
         assertEquals(Result.DONE, migration().run())

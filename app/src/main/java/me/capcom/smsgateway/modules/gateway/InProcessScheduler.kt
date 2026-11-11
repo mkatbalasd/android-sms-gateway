@@ -213,6 +213,11 @@ class InProcessScheduler(
         pull.isRunning || send.isRunning || webhooks.isRunning || stateLoops.values.any { it.isRunning }
     }
 
+    /** Ids of the messages whose state report is running or waiting to retry. */
+    fun runningStateIds(): List<String> = synchronized(lock) {
+        stateLoops.filterValues { it.isRunning }.keys.toList()
+    }
+
     /** Cancels everything that is running or scheduled. */
     fun shutdown() {
         scope.coroutineContext[Job]?.cancelChildren()
@@ -222,15 +227,25 @@ class InProcessScheduler(
      * The unlock handover: lets the running work finish (at most [timeoutMs]), stops this
      * runner, then calls [handover], which starts WorkManager. Call it from a scope other
      * than this scheduler's own.
+     *
+     * State reports that were still running or retrying when the drain gave up are cancelled
+     * by the shutdown, so each of them is handed to [resumeState] after [handover] (the
+     * mode-aware scheduler then enqueues it in WorkManager). Nothing is lost.
      */
-    suspend fun drainThenHandover(timeoutMs: Long = DRAIN_TIMEOUT_MS, handover: () -> Unit) {
+    suspend fun drainThenHandover(
+        timeoutMs: Long = DRAIN_TIMEOUT_MS,
+        resumeState: (String) -> Unit = {},
+        handover: () -> Unit,
+    ) {
         withTimeoutOrNull(timeoutMs) {
             while (isBusy()) {
                 delay(POLL_MS)
             }
         }
+        val unfinished = runningStateIds()
         shutdown()
         handover()
+        unfinished.forEach(resumeState)
     }
 
     companion object {

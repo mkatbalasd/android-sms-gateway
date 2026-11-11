@@ -9,6 +9,7 @@ import android.content.IntentFilter
 import android.os.Build
 import android.util.Log
 import androidx.core.os.UserManagerCompat
+import me.capcom.smsgateway.receivers.BootPolicy
 import me.capcom.smsgateway.receivers.BootReceiver
 import java.io.File
 import java.io.IOException
@@ -55,9 +56,10 @@ object DeviceStorage {
 
     /**
      * The context whose files are device-protected (API 24+); the same context below that.
-     * Until the migration succeeded (it failed, or it is still waiting for the unlock) the
-     * app keeps using the original credential-encrypted data, so a failed copy never makes
-     * the phone look unlinked.
+     * After a FAILED copy the app keeps using the original credential-encrypted data, so a
+     * failed copy never makes the phone look unlinked. While the copy waits for the unlock
+     * this is the (empty) device-protected storage; nothing runs on it (the locked pipeline
+     * needs the flag) and the process restarts at the unlock, see [restartAtUnlock].
      */
     fun deContext(context: Context): Context =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !useCredentialStorage) {
@@ -131,28 +133,42 @@ object DeviceStorage {
     /**
      * The process started while locked, so the copy was deferred. At the unlock this process
      * restarts itself, and the next process runs the copy in `attachBaseContext`, before any
-     * database is open. (An alarm brings the boot receiver back, which does the full start.)
+     * database is open. The unlock can land before the receiver is registered, so after
+     * registering it is checked again and the restart happens at once.
      */
     fun restartAtUnlock(context: Context) {
         val app = context.applicationContext
         app.registerReceiver(object : BroadcastReceiver() {
             override fun onReceive(c: Context, intent: Intent) {
-                try {
-                    val relaunch = PendingIntent.getBroadcast(
-                        app,
-                        0,
-                        Intent(Intent.ACTION_BOOT_COMPLETED).setClass(app, BootReceiver::class.java),
-                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-                    )
-                    (app.getSystemService(Context.ALARM_SERVICE) as AlarmManager)
-                        .set(AlarmManager.RTC, System.currentTimeMillis() + 1_500L, relaunch)
-                } catch (e: Throwable) {
-                    Log.w(TAG, "no relaunch alarm: ${e.javaClass.simpleName}")
-                }
-                Log.d(TAG, "unlocked: restarting to run the deferred storage copy")
-                exitProcess(0)
+                exitAndRelaunch(app)
             }
         }, IntentFilter("android.intent.action.USER_UNLOCKED"))
+
+        if (isUnlocked(app)) {
+            exitAndRelaunch(app)
+        }
+    }
+
+    /**
+     * Exits this process and brings the app back with an app-private action (never the protected
+     * BOOT_COMPLETED, which the system refuses from a non-system sender); [BootReceiver] maps it
+     * to the full start through `BootPolicy`.
+     */
+    fun exitAndRelaunch(app: Context) {
+        try {
+            val relaunch = PendingIntent.getBroadcast(
+                app,
+                0,
+                Intent(BootPolicy.RELAUNCH).setClass(app, BootReceiver::class.java),
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            (app.getSystemService(Context.ALARM_SERVICE) as AlarmManager)
+                .set(AlarmManager.RTC, System.currentTimeMillis() + 1_500L, relaunch)
+        } catch (e: Throwable) {
+            Log.w(TAG, "no relaunch alarm: ${e.javaClass.simpleName}")
+        }
+        Log.d(TAG, "unlocked: restarting to run the deferred storage copy")
+        exitProcess(0)
     }
 }
 
@@ -164,13 +180,17 @@ object MigrationFollowUp {
         /** The copy failed: say so (log), keep running on the original data. */
         REPORT_FAILURE,
 
-        /** The process started locked: restart at the unlock so the copy runs in a fresh process. */
+        /** The process started locked and still is: restart at the unlock so the copy runs in a fresh process. */
         RESTART_AT_UNLOCK,
+
+        /** The copy was skipped (locked at start) but the user is unlocked by now: restart at once. */
+        RESTART_NOW,
     }
 
-    fun of(result: DeviceStorageMigration.Result?): Action = when (result) {
+    fun of(result: DeviceStorageMigration.Result?, unlockedNow: Boolean): Action = when (result) {
         DeviceStorageMigration.Result.FAILED -> Action.REPORT_FAILURE
-        DeviceStorageMigration.Result.SKIPPED_LOCKED -> Action.RESTART_AT_UNLOCK
+        DeviceStorageMigration.Result.SKIPPED_LOCKED ->
+            if (unlockedNow) Action.RESTART_NOW else Action.RESTART_AT_UNLOCK
         else -> Action.NONE
     }
 }

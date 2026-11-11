@@ -56,7 +56,18 @@ class AndroidLocalCleanup(
         withContext(Dispatchers.IO) {
             preferences.edit().also { editor -> LinkSecrets.forget { editor.remove(it) } }.commit()
             payloads.clearAll()
+
+            // ...and from the credential-encrypted rollback copy of the preferences (same file
+            // name, left in place by the migration). Unlinking happens unlocked; if it somehow
+            // does not, there is nothing readable to clear.
+            try {
+                val ce = androidx.preference.PreferenceManager.getDefaultSharedPreferences(appContext)
+                ce.edit().also { editor -> LinkSecrets.forgetInRollbackCopy { editor.remove(it) } }.commit()
+            } catch (e: Exception) {
+                // locked: credential-encrypted storage is not available
+            }
         }
+        SessionPassword.forget()
     }
 
     private companion object {

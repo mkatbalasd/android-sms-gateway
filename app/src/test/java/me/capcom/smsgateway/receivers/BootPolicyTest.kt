@@ -33,6 +33,15 @@ class BootPolicyTest {
     }
 
     @Test
+    fun theAppPrivateRelaunchActionStartsEverythingOnceUnlocked() {
+        // the deferred storage copy restarts the process with this action, never with the
+        // protected BOOT_COMPLETED (a non-system sender cannot send that)
+        assertEquals(Action.START_FULL, decide(BootPolicy.RELAUNCH, unlocked = true))
+        assertEquals(Action.IGNORE, decide(BootPolicy.RELAUNCH, unlocked = true, autostart = false))
+        assertEquals(false, BootPolicy.RELAUNCH.startsWith("android."))
+    }
+
+    @Test
     fun bootCompletedAfterUnlockStartsEverythingAsBefore() {
         for (a in listOf(bootCompleted, replaced, quick, reboot, shutdown)) {
             assertEquals(a, Action.START_FULL, decide(a, unlocked = true))

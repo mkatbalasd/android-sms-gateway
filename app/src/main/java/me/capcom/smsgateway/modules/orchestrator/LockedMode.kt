@@ -14,6 +14,7 @@ import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
 import me.capcom.smsgateway.modules.gateway.InProcessScheduler
+import me.capcom.smsgateway.modules.gateway.WorkScheduler
 import me.capcom.smsgateway.modules.gateway.services.SSEForegroundService
 import me.capcom.smsgateway.modules.orchestrator.LockedPipelineGate.FullStart
 import me.capcom.smsgateway.modules.webhooks.WebHooksService
@@ -145,7 +146,10 @@ object LockedMode : KoinComponent {
 
         scope.launch {
             try {
-                get<InProcessScheduler>().drainThenHandover {
+                get<InProcessScheduler>().drainThenHandover(
+                    // state reports still retrying when the drain gave up: WorkManager takes them over
+                    resumeState = { id -> get<WorkScheduler>().sendState(id) },
+                ) {
                     // the loops have finished (or were stopped); now the full start (WorkManager)
                     get<OrchestratorService>().start(app, true)
                 }

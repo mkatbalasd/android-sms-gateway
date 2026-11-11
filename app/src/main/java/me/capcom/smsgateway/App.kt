@@ -47,6 +47,16 @@ class App: Application() {
     override fun onCreate() {
         super.onCreate()
 
+        // CARD-21: the copy was skipped because this process started locked, and the user is
+        // unlocked by now (the unlock receiver would never fire). Running on the empty
+        // device-protected storage would look unlinked and let a re-link be overwritten by the
+        // later copy, so restart before anything starts or writes.
+        if (MigrationFollowUp.of(DeviceStorage.lastResult, DeviceStorage.isUnlocked(this))
+            == MigrationFollowUp.Action.RESTART_NOW
+        ) {
+            DeviceStorage.exitAndRelaunch(this)
+        }
+
         startKoin {
             androidLogger()
             androidContext(this@App)
@@ -92,7 +102,9 @@ class App: Application() {
         // CARD-21: say it when the copy to device-protected storage failed (the app runs on the
         // original data meanwhile, so it does not look unlinked), and restart at the unlock
         // when the copy was deferred because this process started locked.
-        when (MigrationFollowUp.of(DeviceStorage.lastResult)) {
+        when (MigrationFollowUp.of(DeviceStorage.lastResult, DeviceStorage.isUnlocked(this))) {
+            MigrationFollowUp.Action.RESTART_NOW -> Unit // handled first thing in onCreate
+
             MigrationFollowUp.Action.REPORT_FAILURE -> get<LogsService>().insert(
                 LogEntry.Priority.ERROR,
                 "DeviceStorage",

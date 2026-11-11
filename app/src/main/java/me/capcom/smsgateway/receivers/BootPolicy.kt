@@ -19,8 +19,15 @@ object BootPolicy {
     /** Direct Boot exists from API 24. */
     const val FIRST_DIRECT_BOOT_API = 24
 
+    /**
+     * App-private: sent by our own alarm after the process exits to run the deferred storage
+     * copy. Not the protected BOOT_COMPLETED, which the system refuses from a non-system sender.
+     */
+    const val RELAUNCH = "me.capcom.smsgateway.action.RELAUNCH"
+
     /** Actions that, while unlocked, start everything (the behaviour before CARD-21). */
     val UNLOCKED_ACTIONS: Set<String> = setOf(
+        RELAUNCH,
         Intent.ACTION_BOOT_COMPLETED,
         "android.intent.action.ACTION_BOOT_COMPLETED",
         Intent.ACTION_MY_PACKAGE_REPLACED,

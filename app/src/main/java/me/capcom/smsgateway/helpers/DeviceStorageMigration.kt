@@ -36,6 +36,9 @@ class DeviceStorageMigration(
         fun hasSource(): Boolean
 
         fun copy()
+
+        /** Deletes temporary files a killed earlier attempt left in the destination. Never throws on a missing directory. */
+        fun cleanLeftovers() {}
     }
 
     enum class Result { SKIPPED_LOCKED, ALREADY_DONE, DONE, FAILED }
@@ -48,6 +51,15 @@ class DeviceStorageMigration(
         failure = null
         if (!isUnlocked()) return Result.SKIPPED_LOCKED
         if (isDone()) return Result.ALREADY_DONE
+
+        // a killed earlier attempt may have left temporary copies in the destination
+        for (store in stores) {
+            try {
+                store.cleanLeftovers()
+            } catch (e: Exception) {
+                // best effort; the copy below overwrites its own temporary names anyway
+            }
+        }
 
         for (store in stores) {
             try {

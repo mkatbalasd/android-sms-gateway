@@ -66,6 +66,16 @@ object AtomicFileSet {
         }
     }
 
+    /**
+     * Removes the temporary files a killed attempt left in [dir]. They can hold an unscrubbed
+     * copy, so every migration attempt starts by deleting them.
+     */
+    fun deleteLeftovers(dir: File) {
+        dir.listFiles()?.forEach {
+            if (it.name.endsWith(TMP_SUFFIX)) it.delete()
+        }
+    }
+
     private fun copyFile(source: File, target: File) {
         val expected = source.length()
         FileInputStream(source).use { input ->

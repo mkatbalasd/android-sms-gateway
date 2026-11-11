@@ -17,8 +17,20 @@ internal object LinkSecrets {
         "gateway.fcm_token",
     )
 
+    private const val REGISTRATION_INFO = "gateway.REGISTRATION_INFO"
+
     /** @param remove removes one preference key (a `SharedPreferences.Editor`, in the app). */
     fun forget(remove: (String) -> Unit) {
         PREFERENCE_KEYS.forEach(remove)
+    }
+
+    /**
+     * The credential-encrypted copy the migration leaves for a rollback still holds the old
+     * link (token, and the password the device-protected copy never had). Unlink clears it
+     * there too, so a downgrade after a re-link cannot bring the old link back.
+     */
+    fun forgetInRollbackCopy(remove: (String) -> Unit) {
+        PREFERENCE_KEYS.forEach(remove)
+        remove(REGISTRATION_INFO)
     }
 }

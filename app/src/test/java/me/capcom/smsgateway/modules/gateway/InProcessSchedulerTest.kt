@@ -227,6 +227,51 @@ class InProcessSchedulerTest {
         assertTrue(handedOver)
     }
 
+    @Test
+    fun aStateReportStillInBackoffAtTheHandoverIsReissuedAfterIt() = runTest {
+        // CARD-21 (rev-fork17-2): the drain gives up after the timeout and shuts the loops down;
+        // a report that was still retrying must not be lost, WorkManager takes it over
+        val tasks = FakeTasks(this).apply { stateFailsAlways = true }
+        val s = scheduler(tasks)
+        val order = mutableListOf<String>()
+
+        s.sendState("m1") // fails, now waits in backoff
+        runCurrent()
+        assertEquals(listOf("m1"), s.runningStateIds())
+
+        val caller = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+        caller.launch {
+            s.drainThenHandover(
+                timeoutMs = 1_000,
+                resumeState = { order += "state:$it" },
+            ) { order += "handover" }
+        }
+        advanceTimeBy(1_500)
+        runCurrent()
+
+        assertEquals(listOf("handover", "state:m1"), order)
+        assertFalse(s.isBusy())
+    }
+
+    @Test
+    fun aFinishedStateReportIsNotReissued() = runTest {
+        val tasks = FakeTasks(this)
+        val s = scheduler(tasks)
+        val resumed = mutableListOf<String>()
+
+        s.sendState("done")
+        runCurrent()
+        assertTrue(s.runningStateIds().isEmpty())
+
+        val caller = CoroutineScope(SupervisorJob() + StandardTestDispatcher(testScheduler))
+        caller.launch { s.drainThenHandover(resumeState = { resumed += it }) { } }
+        runCurrent()
+        advanceTimeBy(500)
+        runCurrent()
+
+        assertTrue(resumed.isEmpty())
+    }
+
     // region lock-aware routing: nothing reaches WorkManager while locked
 
     private class Recording(val name: String, val log: MutableList<String>) : WorkScheduler {
