@@ -62,6 +62,11 @@ data class LoginVerifyRequest(
     @SerializedName("login_id") val loginId: String,
     val code: String,
     val device: DeviceInfo,
+    /**
+     * true only when the app re-signs in on an already linked phone (V2-L14): the platform then
+     * mints no enrolment. Null otherwise, so Gson leaves it out of the body.
+     */
+    val reattach: Boolean? = null,
 ) {
     override fun toString() = "LoginVerifyRequest(redacted)"
 }

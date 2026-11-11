@@ -4,6 +4,7 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.content.TextContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.runBlocking
 import me.capcom.smsgateway.ui.account.HomeStatus
@@ -22,6 +23,7 @@ internal class LinkedSignInAgainTest {
 
     private val json = headersOf(HttpHeaders.ContentType, "application/json")
     private val paths = mutableListOf<String>()
+    private val bodies = mutableListOf<String>()
 
     private fun repo(
         settings: AccountSettings,
@@ -29,6 +31,7 @@ internal class LinkedSignInAgainTest {
     ): AccountRepository {
         val engine = MockEngine { request ->
             paths.add(request.url.encodedPath)
+            bodies.add((request.body as? TextContent)?.text ?: "")
             val (status, body) = handler(request.url.encodedPath)
             respond(content = body, status = status, headers = json)
         }
@@ -100,6 +103,24 @@ internal class LinkedSignInAgainTest {
         assertNull(settings.pending)
         // Only the verify call: no enrolment, no gateway registration.
         assertEquals(listOf("/v1/app/login/verify"), paths)
+    }
+
+    @Test
+    fun aReSignInSendsTheReattachFlagAndAFirstSignInDoesNot() = runBlocking {
+        val linked = revokedLinkedSettings()
+        repo(linked) { verifyAnswer("t") }
+            .verify("123456", resign = true, ownerTenantId = linked.tenantId)
+        assertEquals(1, bodies.size)
+        assertTrue(bodies[0].contains("\"reattach\":true"))
+
+        bodies.clear()
+        val first = AccountSettings(FakeKeyValueStorage())
+        first.pending = PendingVerification(
+            PendingVerification.KIND_LOGIN, "L1", null, null, null, null
+        )
+        repo(first) { verifyAnswer("t") }.verify("123456")
+        assertEquals(1, bodies.size)
+        assertFalse(bodies[0].contains("reattach"))
     }
 
     @Test

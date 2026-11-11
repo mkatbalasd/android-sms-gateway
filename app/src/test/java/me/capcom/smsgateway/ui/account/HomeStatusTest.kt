@@ -86,7 +86,10 @@ internal class HomeStatusTest {
     fun withoutAPingIntervalTheDefaultIsThePullPeriod() {
         // The default phone has no ping interval: contact comes every 15 minutes (the pull
         // worker), so a 14 minute gap is normal and plain «يعمل» holds up to 20.
-        assertEquals(15 * minute, HomeStatus.DEFAULT_EXPECTED_MS)
+        assertEquals(
+            androidx.work.PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS,
+            HomeStatus.DEFAULT_EXPECTED_MS
+        )
         for (min in listOf(1L, 14L, 15L, 20L)) {
             assertEquals(
                 PhoneStatus.Working(null, false),
