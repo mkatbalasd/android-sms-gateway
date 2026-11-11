@@ -316,6 +316,7 @@
     <string name="account_err_locked">الحساب مقفل مؤقتاً. تواصل مع الدعم.</string>
     <string name="account_err_suspended">الحساب موقوف. تواصل مع الدعم.</string>
     <string name="account_err_session">انتهى تسجيل الدخول. سجّل الدخول من جديد.</string>
+    <string name="account_err_mismatch">هذا الهاتف تابع لحساب آخر. سجّل الدخول بحساب الهاتف.</string>
     <string name="account_err_not_ready">نكمل تجهيز حسابك؛ سيُربط الهاتف خلال لحظات. حاول مرة أخرى.</string>
     <string name="account_err_enrolment">تعذّر ربط الهاتف. حاول مرة أخرى.</string>
     <string name="account_err_enrolment_code">رُفض الربط. حاول مرة أخرى.</string>
@@ -362,7 +363,12 @@
     <string name="home_mode_test">وضع التجربة</string>
     <string name="home_mode_live">الإرسال الحقيقي مفعّل</string>
     <string name="home_status_checking">جارٍ فحص الهاتف…</string>
-    <string name="home_status_working_now">يعمل ✓ — متصل الآن</string>
+    <string name="home_status_working">يعمل</string>
+    <string name="home_reattach_failed">تم تسجيل الدخول، لكن تعذّر ربط هذا الهاتف بحسابك الآن. الهاتف ما زال مربوطاً. حاول مرة أخرى.</string>
+    <string name="home_reattach_not_found">لم نجد هذا الهاتف في الحساب الذي سجّلت به. الهاتف ما زال مربوطاً.</string>
+    <string name="home_reattach_retry">حاول مرة أخرى</string>
+    <string name="home_session_ended">انتهى تسجيل دخولك للحساب. الهاتف ما زال مربوطاً ويعمل.</string>
+    <string name="home_session_signin">سجّل الدخول من جديد</string>
     <string name="home_status_working_ago">يعمل — آخر اتصال قبل %1$d دقيقة</string>
     <string name="home_status_stopped">متوقف — افتح التطبيق وشغّل الخدمة</string>
     <string name="home_status_stopped_permission">متوقف — اسمح بإذن الرسائل</string>

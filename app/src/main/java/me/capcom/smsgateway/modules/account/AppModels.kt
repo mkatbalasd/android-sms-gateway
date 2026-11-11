@@ -88,6 +88,8 @@ data class AppHome(
     /** V2-L23: the owner paused this phone on the platform. Absent from an older platform. */
     val paused: Boolean? = null,
     @SerializedName("paused_at") val pausedAt: String? = null,
+    /** The platform's hold limit in minutes (top level of app-home); the phone falls back to 60. */
+    @SerializedName("pause_hold_max_min") val pauseHoldMaxMin: Int? = null,
 )
 
 data class TestRecipient(
@@ -131,3 +133,30 @@ data class KeepAliveRequest(
 data class UnlinkRequest(val password: String) {
     override fun toString() = "UnlinkRequest(redacted)"
 }
+
+/** POST /v1/app/device/reattach/challenge: the gateway device id this phone holds. */
+data class ReattachChallengeRequest(
+    @SerializedName("externalDeviceId") val externalDeviceId: String,
+)
+
+/** A nonce encrypted to this phone's E2E public key. Never logged: the ciphertext is redacted. */
+data class ReattachChallenge(
+    @SerializedName("challengeId") val challengeId: String?,
+    @SerializedName("ciphertext") val ciphertext: String?,
+    @SerializedName("expiresAt") val expiresAt: String?,
+) {
+    override fun toString() = "ReattachChallenge(redacted)"
+}
+
+/** POST /v1/app/device/reattach: the decrypted nonce proves the phone holds the device key. */
+data class ReattachRequest(
+    @SerializedName("challengeId") val challengeId: String,
+    @SerializedName("nonce") val nonce: String,
+) {
+    override fun toString() = "ReattachRequest(redacted)"
+}
+
+data class ReattachResult(
+    @SerializedName("attached") val attached: Boolean?,
+    @SerializedName("deviceId") val deviceId: String?,
+)

@@ -51,7 +51,9 @@ object AccountMessages {
         "VALIDATION_ERROR" -> R.string.account_err_validation
         "ACCOUNT_LOCKED" -> R.string.account_err_locked
         "TENANT_SUSPENDED" -> R.string.account_err_suspended
-        "APP_SESSION_INVALID", "NO_SESSION" -> R.string.account_err_session
+        "APP_SESSION_INVALID", "APP_SESSION_REVOKED", "NO_SESSION" -> R.string.account_err_session
+        // Signing in again on a linked phone with another account: refused, nothing is stored.
+        "ACCOUNT_MISMATCH" -> R.string.account_err_mismatch
         "GATEWAY_ACCOUNT_NOT_READY" -> R.string.account_err_not_ready
         "ENROLMENT_CODE_REFUSED" -> R.string.account_err_enrolment_code
         "ENROLMENT_SERVER_MISMATCH" -> R.string.account_err_enrolment_server

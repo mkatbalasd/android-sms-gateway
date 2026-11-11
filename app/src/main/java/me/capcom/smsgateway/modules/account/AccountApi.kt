@@ -63,6 +63,9 @@ interface AppBackend {
 
     /** POST /v1/app/device/resume (V2-L23): no body; idempotent. */
     suspend fun resumeDevice(access: String)
+
+    suspend fun reattachChallenge(access: String, request: ReattachChallengeRequest): ReattachChallenge
+    suspend fun reattach(access: String, request: ReattachRequest): ReattachResult
 }
 
 /**
@@ -177,6 +180,14 @@ class AccountApi(
     override suspend fun resumeDevice(access: String) {
         send("/app/device/resume", null, access)
     }
+
+    override suspend fun reattachChallenge(
+        access: String,
+        request: ReattachChallengeRequest,
+    ): ReattachChallenge = parse(send("/app/device/reattach/challenge", request, access))
+
+    override suspend fun reattach(access: String, request: ReattachRequest): ReattachResult =
+        parse(send("/app/device/reattach", request, access))
 
     //endregion
 

@@ -339,6 +339,7 @@
     <string name="account_err_locked">The account is locked for now. Contact support.</string>
     <string name="account_err_suspended">The account is suspended. Contact support.</string>
     <string name="account_err_session">The sign-in ended. Sign in again.</string>
+    <string name="account_err_mismatch">This phone belongs to another account. Sign in with that account.</string>
     <string name="account_err_not_ready">We are finishing your account; the phone will link in a moment. Try again.</string>
     <string name="account_err_enrolment">The phone could not be linked. Try again.</string>
     <string name="account_err_enrolment_code">The link was refused. Try again.</string>
@@ -385,7 +386,12 @@
     <string name="home_mode_test">Test mode</string>
     <string name="home_mode_live">Live sending on</string>
     <string name="home_status_checking">Checking the phone…</string>
-    <string name="home_status_working_now">Working ✓ · connected now</string>
+    <string name="home_status_working">Working</string>
+    <string name="home_reattach_failed">Signed in, but this phone could not be tied to your account yet. The phone is still linked. Try again.</string>
+    <string name="home_reattach_not_found">This phone was not found in the account you signed in with. The phone is still linked.</string>
+    <string name="home_reattach_retry">Try again</string>
+    <string name="home_session_ended">Your account sign-in ended. The phone is still linked and working.</string>
+    <string name="home_session_signin">Sign in again</string>
     <string name="home_status_working_ago">Working · last connection %1$d min ago</string>
     <string name="home_status_stopped">Stopped · open the app and start the service</string>
     <string name="home_status_stopped_permission">Stopped · allow the SMS permission</string>

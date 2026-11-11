@@ -10,7 +10,7 @@ import org.junit.Assert.fail
 import org.junit.Test
 import java.io.IOException
 
-/** CARD V2-L23: pause, resume, the 60-minute drop rule and the autostart gate. */
+/** CARD V2-L23: pause, resume, the drop rule and the autostart gate. */
 internal class PauseHoldTest {
 
     private val now = 1_800_000_000_000L
@@ -18,7 +18,8 @@ internal class PauseHoldTest {
 
     private class FakeStore : PauseStore {
         override var pausedAtMs: Long? = null
-        override var sweepAfterResume: Boolean = false
+        override var resumedAtMs: Long? = null
+        override var holdMaxMin: Int? = null
     }
 
     /** One timeline for everything the controller touches, so the order is what is asserted. */
@@ -41,26 +42,29 @@ internal class PauseHoldTest {
         }
     }
 
-    private fun sweepOver(pending: FakePending, store: PauseStore) =
-        StaleSweep(pending, store) { now }
+    private fun sweepOver(pending: FakePending, store: PauseStore, at: Long = now) =
+        StaleSweep(pending, store) { at }
 
     private fun controller(
         client: FakeAppClient,
         store: FakeStore,
         pending: FakePending = FakePending(emptyList(), events),
-    ) = PauseController(client, store, services, sweepOver(pending, store)) { now }
+        at: Long = now,
+    ) = PauseController(client, store, services, sweepOver(pending, store, at)) { at }
 
     // region pause
 
     @Test
     fun pauseTellsThePlatformBeforeItStopsTheServices() = runBlocking {
         val client = FakeAppClient().apply { pauseAnswer = { events.add("api:pause") } }
-        val store = FakeStore()
+        val store = FakeStore().apply { pausedAtMs = now - 500 * minute; resumedAtMs = now - 400 * minute }
 
         controller(client, store).pause()
 
         assertEquals(listOf("api:pause", "stop"), events)
         assertEquals(now, store.pausedAtMs)
+        assertNull("a new pause has no end yet", store.resumedAtMs)
+        assertTrue(store.isPaused)
     }
 
     @Test
@@ -77,6 +81,7 @@ internal class PauseHoldTest {
 
         assertTrue("the services must not be stopped", events.isEmpty())
         assertNull(store.pausedAtMs)
+        assertFalse(store.isPaused)
     }
 
     @Test
@@ -94,36 +99,38 @@ internal class PauseHoldTest {
         }
 
         assertFalse(events.contains("stop"))
-        assertNull(store.pausedAtMs)
+        assertFalse(store.isPaused)
     }
 
     // endregion
 
-    // region resume and the drop rule
+    // region resume
 
     @Test
-    fun resumeDropsOldMessagesBeforeTheServicesStartAndClearsTheFlag() = runBlocking {
+    fun resumeSweepsTheQueueThenTellsThePlatformThenStartsTheServices() = runBlocking {
         val client = FakeAppClient().apply { resumeAnswer = { events.add("api:resume") } }
-        val store = FakeStore().apply { pausedAtMs = now - 10 * minute }
+        val pausedAt = now - 90 * minute
+        val store = FakeStore().apply { pausedAtMs = pausedAt }
         val pending = FakePending(
             listOf(
-                PendingStamp("old", now - 61 * minute),
-                PendingStamp("recent", now - 59 * minute),
+                PendingStamp("old", pausedAt + 10 * minute),
+                PendingStamp("recent", now - 30 * minute),
             ),
             events,
         )
 
         controller(client, store, pending).resume()
 
-        // The old one is failed first, so nothing old can be sent by the freshly started services.
-        assertEquals(listOf("fail:old", "start", "api:resume"), events)
+        assertEquals(listOf("fail:old", "api:resume", "start"), events)
         assertEquals(listOf("old" to "TTL expired"), pending.failed)
-        assertNull(store.pausedAtMs)
-        assertTrue("the first pull after the resume sweeps again", store.sweepAfterResume)
+        assertEquals(now, store.resumedAtMs)
+        assertFalse(store.isPaused)
+        // The last interval is kept for the drop rule on every later pull.
+        assertEquals(pausedAt, store.pausedAtMs)
     }
 
     @Test
-    fun aResumeThatCannotReachThePlatformKeepsThePausedFlagForARetry() = runBlocking {
+    fun aResumeThatCannotReachThePlatformStartsNothingAndStaysPaused() = runBlocking {
         val client = FakeAppClient().apply { resumeAnswer = { throw IOException("no network") } }
         val store = FakeStore().apply { pausedAtMs = now - minute }
 
@@ -134,28 +141,72 @@ internal class PauseHoldTest {
             // retry is allowed: the platform call is idempotent
         }
 
-        assertEquals(now - minute, store.pausedAtMs)
+        assertFalse("the services must not start before the platform knows", events.contains("start"))
+        assertNull(store.resumedAtMs)
+        assertTrue(store.isPaused)
+    }
+
+    // endregion
+
+    // region the hold rule
+
+    @Test
+    fun theHoldIsMeasuredFromTheLaterOfCreationAndPause() {
+        val pausedAt = now - 100 * minute
+        // Created long before the pause: held from the pause, 100 minutes.
+        assertTrue(PauseHold.heldTooLong(now - 5 * 60 * minute, pausedAt, now, 60))
+        // The same message when the pause lasted only 40 minutes is fine.
+        assertFalse(PauseHold.heldTooLong(now - 5 * 60 * minute, now - 40 * minute, now, 60))
+        // Created during the pause, 30 minutes ago: held 30 minutes.
+        assertFalse(PauseHold.heldTooLong(now - 30 * minute, pausedAt, now, 60))
+        // Created during the pause, 61 minutes ago.
+        assertTrue(PauseHold.heldTooLong(now - 61 * minute, pausedAt, now, 60))
+        // Exactly the limit is not over the limit.
+        assertFalse(PauseHold.heldTooLong(now - 60 * minute, pausedAt, now, 60))
+        assertTrue(PauseHold.heldTooLong(now - 60 * minute - 1, pausedAt, now, 60))
     }
 
     @Test
-    fun onlyMessagesOlderThanSixtyMinutesAreStale() {
+    fun theLimitIsThePlatformsAndFallsBackToSixty() {
         assertEquals(60, PAUSE_HOLD_MAX_MIN)
-        assertTrue(PauseHold.isStale(now - 60 * minute - 1, now))
-        assertFalse("exactly 60 minutes is not older than 60 minutes", PauseHold.isStale(now - 60 * minute, now))
-        assertFalse(PauseHold.isStale(now - 5 * minute, now))
-        // A message "from the future" (clock skew) is never stale.
-        assertFalse(PauseHold.isStale(now + 5 * minute, now))
+        assertEquals(60, PauseHold.holdMaxMin(null))
+        assertEquals(60, PauseHold.holdMaxMin(0))
+        assertEquals(30, PauseHold.holdMaxMin(30))
+        assertTrue(PauseHold.heldTooLong(now - 31 * minute, now - 100 * minute, now, 30))
+        assertFalse(PauseHold.heldTooLong(now - 31 * minute, now - 100 * minute, now, 60))
     }
 
     @Test
-    fun theSweepFailsEveryOldOneAndSparesTheRecentOnes() = runBlocking {
-        val store = FakeStore()
+    fun theDropOnPullAppliesOnlyToMessagesCreatedBeforeTheResume() {
+        val pausedAt = now - 200 * minute
+        val resumedAt = now - 10 * minute
+        fun drop(createdAt: Long, paused: Long? = pausedAt, resumed: Long? = resumedAt) =
+            PauseHold.dropOnPull(createdAt, paused, resumed, now, 60)
+
+        // Created during the pause and held 120 minutes by now: dropped.
+        assertTrue(drop(now - 120 * minute))
+        // Created before the pause: held from the pause start, 200 minutes: dropped.
+        assertTrue(drop(now - 24 * 60 * minute))
+        // Created during the pause but only 30 minutes ago: kept.
+        assertFalse(drop(now - 30 * minute, resumed = now - 1 * minute))
+        // Created after the resume: an ordinary message, never dropped.
+        assertFalse(drop(resumedAt + 1))
+        assertFalse(drop(resumedAt))
+        // No pause ever, or still paused: the rule has nothing to say.
+        assertFalse(drop(now - 500 * minute, paused = null))
+        assertFalse(drop(now - 500 * minute, resumed = null))
+    }
+
+    @Test
+    fun theSweepFailsEveryMessageHeldTooLongAndSparesTheRest() = runBlocking {
+        val pausedAt = now - 100 * minute
+        val store = FakeStore().apply { pausedAtMs = pausedAt }
         val pending = FakePending(
             listOf(
-                PendingStamp("a", now - 3 * 60 * minute),
-                PendingStamp("b", now - 30 * minute),
-                PendingStamp("c", now - 61 * minute),
-                PendingStamp("d", now),
+                PendingStamp("before-pause", now - 5 * 60 * minute),
+                PendingStamp("during-30", now - 30 * minute),
+                PendingStamp("during-61", now - 61 * minute),
+                PendingStamp("fresh", now),
             ),
             events,
         )
@@ -163,13 +214,35 @@ internal class PauseHoldTest {
         val dropped = sweepOver(pending, store).sweep()
 
         assertEquals(2, dropped)
-        assertEquals(listOf("a", "c"), pending.failed.map { it.first })
+        assertEquals(listOf("before-pause", "during-61"), pending.failed.map { it.first })
         assertTrue(pending.failed.all { it.second == "TTL expired" })
     }
 
     @Test
-    fun oneMessageThatCannotBeFailedDoesNotStopTheRest() = runBlocking {
+    fun theSweepUsesThePlatformsLimit() = runBlocking {
+        val store = FakeStore().apply { pausedAtMs = now - 100 * minute; holdMaxMin = 20 }
+        val pending = FakePending(
+            listOf(PendingStamp("a", now - 25 * minute), PendingStamp("b", now - 10 * minute)),
+            events,
+        )
+
+        sweepOver(pending, store).sweep()
+
+        assertEquals(listOf("a"), pending.failed.map { it.first })
+    }
+
+    @Test
+    fun aSweepWithoutAPauseDropsNothing() = runBlocking {
         val store = FakeStore()
+        val pending = FakePending(listOf(PendingStamp("old", now - 5 * 60 * minute)), events)
+
+        assertEquals(0, sweepOver(pending, store).sweep())
+        assertTrue(pending.failed.isEmpty())
+    }
+
+    @Test
+    fun oneMessageThatCannotBeFailedDoesNotStopTheRest() = runBlocking {
+        val store = FakeStore().apply { pausedAtMs = now - 200 * minute }
         val failing = object : PendingStore {
             val failed = mutableListOf<String>()
             override suspend fun pending() = listOf(
@@ -189,30 +262,67 @@ internal class PauseHoldTest {
         assertEquals(listOf("y"), failing.failed)
     }
 
+    // endregion
+
+    // region restore from the server
+
     @Test
-    fun theFirstPullAfterAResumeSweepsOnceAndThenStops() = runBlocking {
-        val store = FakeStore().apply { sweepAfterResume = true }
-        val pending = FakePending(listOf(PendingStamp("late", now - 2 * 60 * minute)), events)
-        val sweep = sweepOver(pending, store)
+    fun aPauseTheServerKnowsIsTakenOverAndTheServicesStop() {
+        val store = FakeStore()
+        val client = FakeAppClient()
+        val serverPausedAt = now - 20 * minute
 
-        sweep.onPullDone()
-        assertEquals(listOf("late"), pending.failed.map { it.first })
-        assertFalse(store.sweepAfterResume)
+        val restored = controller(client, store).restore(
+            serverPaused = true, serverPausedAtMs = serverPausedAt, requestedAtMs = now
+        )
 
-        // A later pull never drops anything: the rule belongs to the resume only.
-        pending.failed.clear()
-        sweep.onPullDone()
-        assertTrue(pending.failed.isEmpty())
+        assertTrue(restored)
+        assertTrue(store.isPaused)
+        assertEquals(serverPausedAt, store.pausedAtMs)
+        assertEquals(listOf("stop"), events)
     }
 
     @Test
-    fun aPullWithoutAResumeSweepsNothing() = runBlocking {
+    fun aServerPauseWithoutATimeUsesTheClock() {
         val store = FakeStore()
-        val pending = FakePending(listOf(PendingStamp("old", now - 5 * 60 * minute)), events)
 
-        sweepOver(pending, store).onPullDone()
+        controller(FakeAppClient(), store).restore(true, null, now)
 
-        assertTrue(pending.failed.isEmpty())
+        assertEquals(now, store.pausedAtMs)
+    }
+
+    @Test
+    fun anAnswerAskedForBeforeTheResumeIsStale() {
+        val store = FakeStore().apply { pausedAtMs = now - 60 * minute; resumedAtMs = now }
+
+        val restored = controller(FakeAppClient(), store).restore(
+            serverPaused = true, serverPausedAtMs = now - 60 * minute, requestedAtMs = now - 1_000
+        )
+
+        assertFalse(restored)
+        assertFalse(store.isPaused)
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun restoreDoesNothingWhenAlreadyPausedOrTheServerIsNotPaused() {
+        val paused = FakeStore().apply { pausedAtMs = now - minute }
+        assertFalse(controller(FakeAppClient(), paused).restore(true, null, now))
+
+        val running = FakeStore()
+        assertFalse(controller(FakeAppClient(), running).restore(false, null, now))
+        assertFalse(controller(FakeAppClient(), running).restore(null, null, now))
+        assertTrue(events.isEmpty())
+    }
+
+    @Test
+    fun aNewerPauseAfterAnOldResumeIsRestored() {
+        // Resumed an hour ago, paused again elsewhere: the answer is newer than the resume.
+        val store = FakeStore().apply { pausedAtMs = now - 300 * minute; resumedAtMs = now - 60 * minute }
+
+        assertTrue(controller(FakeAppClient(), store).restore(true, now - 5 * minute, now))
+        assertTrue(store.isPaused)
+        assertNull(store.resumedAtMs)
     }
 
     // endregion
@@ -221,39 +331,48 @@ internal class PauseHoldTest {
 
     @Test
     fun autostartIsSuppressedWhilePaused() {
-        assertTrue(PauseHold.shouldAutostart(autostartEnabled = true, pausedAtMs = null))
-        assertFalse(PauseHold.shouldAutostart(autostartEnabled = true, pausedAtMs = now))
-        assertFalse(PauseHold.shouldAutostart(autostartEnabled = false, pausedAtMs = null))
-        assertFalse(PauseHold.shouldAutostart(autostartEnabled = false, pausedAtMs = now))
+        assertTrue(PauseHold.shouldAutostart(autostartEnabled = true, paused = false))
+        assertFalse(PauseHold.shouldAutostart(autostartEnabled = true, paused = true))
+        assertFalse(PauseHold.shouldAutostart(autostartEnabled = false, paused = false))
+        assertFalse(PauseHold.shouldAutostart(autostartEnabled = false, paused = true))
+    }
+
+    @Test
+    fun aResumedPhoneMayAutostartAgain() {
+        val store = FakeStore().apply { pausedAtMs = now - 100 * minute; resumedAtMs = now }
+        assertTrue(PauseHold.shouldAutostart(autostartEnabled = true, paused = store.isPaused))
     }
 
     @Test
     fun pausedIsTheLocalFlagOrTheServersWord() {
-        assertTrue(PauseHold.isPaused(now, null))
-        assertTrue(PauseHold.isPaused(null, true))
-        assertFalse(PauseHold.isPaused(null, false))
-        assertFalse(PauseHold.isPaused(null, null))
+        assertTrue(PauseHold.isPaused(true, null))
+        assertTrue(PauseHold.isPaused(false, true))
+        assertFalse(PauseHold.isPaused(false, false))
+        assertFalse(PauseHold.isPaused(false, null))
     }
 
     @Test
-    fun thePausedFlagSurvivesARestartAndTheAccountResetForgetsIt() {
+    fun theIntervalSurvivesARestartAndTheAccountResetForgetsIt() {
         val storage = FakeKeyValueStorage()
         val settings = AccountSettings(storage)
+        settings.holdMaxMin = 45
         settings.pausedAtMs = now
-        settings.sweepAfterResume = true
 
         val again = AccountSettings(storage)
         assertEquals(now, again.pausedAtMs)
-        assertTrue(again.sweepAfterResume)
+        assertEquals(45, again.holdMaxMin)
+        assertTrue(again.isPaused)
 
-        again.pausedAtMs = null
-        again.sweepAfterResume = false
-        assertNull(AccountSettings(storage).pausedAtMs)
-        assertFalse(AccountSettings(storage).sweepAfterResume)
+        again.resumedAtMs = now + minute
+        val third = AccountSettings(storage)
+        assertFalse(third.isPaused)
+        assertEquals(now, third.pausedAtMs)
 
-        again.pausedAtMs = now
-        again.reset()
-        assertNull(AccountSettings(storage).pausedAtMs)
+        third.reset()
+        val fresh = AccountSettings(storage)
+        assertNull(fresh.pausedAtMs)
+        assertNull(fresh.resumedAtMs)
+        assertFalse(fresh.isPaused)
     }
 
     // endregion

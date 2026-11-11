@@ -10,6 +10,8 @@ import android.os.PowerManager
 import android.util.Log
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.helpers.SSEManager
+import me.capcom.smsgateway.modules.account.PauseGate
+import me.capcom.smsgateway.modules.connection.ConnectionService
 import me.capcom.smsgateway.modules.events.ExternalEvent
 import me.capcom.smsgateway.modules.events.ExternalEventType
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
@@ -27,6 +29,7 @@ class SSEForegroundService : Service() {
 
     private val notificationsSvc: NotificationsService by inject()
     private val logsService: LogsService by inject()
+    private val connectionService: ConnectionService by inject()
 
     private val wakeLock: PowerManager.WakeLock by lazy {
         (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
@@ -51,6 +54,7 @@ class SSEForegroundService : Service() {
         )
             .apply {
                 onConnected = {
+                    settings.recordContact()
                     Log.d("SSEForegroundService", "SSE connected, pulling pending messages")
                     try {
                         PullMessagesWorker.start(this@SSEForegroundService)
@@ -64,6 +68,7 @@ class SSEForegroundService : Service() {
                     }
                 }
                 onEvent = { event, data ->
+                    settings.recordContact()
                     Log.d("SSEForegroundService", "$event: $data")
 
                     try {
@@ -79,6 +84,16 @@ class SSEForegroundService : Service() {
                         )
                     }
                 }
+                // CARD V2-L19: quiet for over a minute: pull now, same pull as on connect,
+                // so delivery never waits for WorkManager's 15-minute floor.
+                onSilent = { onConnected?.invoke() }
+                onWatchdogReconnect = { seconds ->
+                    logsService.insert(
+                        LogEntry.Priority.WARN,
+                        "SSEForegroundService",
+                        "SSE silent for ${seconds}s, reconnecting",
+                    )
+                }
             }
     }
 
@@ -90,6 +105,12 @@ class SSEForegroundService : Service() {
         }
         if (!wifiLock.isHeld) {
             wifiLock.acquire()
+        }
+
+        // CARD V2-L19: replace the stream as soon as the network is back.
+        connectionService.onNetworkAvailable = {
+            // V2-L23: never reconnect while paused (the stream is torn down by the pause).
+            if (!PauseGate.isPaused()) sseManager.reconnectNow()
         }
     }
 
@@ -129,6 +150,7 @@ class SSEForegroundService : Service() {
 
     override fun onDestroy() {
         sseManager.disconnect()
+        connectionService.onNetworkAvailable = null
         if (wifiLock.isHeld) {
             wifiLock.release()
         }
@@ -148,6 +170,9 @@ class SSEForegroundService : Service() {
 
     companion object {
         fun start(context: Context) {
+            // V2-L23: a paused phone keeps no live stream (resume starts it again).
+            if (PauseGate.isPaused()) return
+
             val intent = Intent(context, SSEForegroundService::class.java)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

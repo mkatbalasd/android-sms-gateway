@@ -34,7 +34,7 @@ class OrchestratorService(
     fun start(context: Context, autostart: Boolean) {
         // Boot, app start and every keep-alive path come here with autostart = true;
         // a phone the owner paused (V2-L23) stays stopped. A tap on «استئناف» is not an autostart.
-        if (autostart && !PauseHold.shouldAutostart(settings.autostart, account.pausedAtMs)) {
+        if (autostart && !PauseHold.shouldAutostart(settings.autostart, account.isPaused)) {
             return
         }
 

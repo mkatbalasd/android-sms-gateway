@@ -28,7 +28,25 @@ class ConnectionService(
         context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
     private val logsService by inject<LogsService>()
 
+    /**
+     * Called when the default network becomes available again (or changes). Set by the SSE
+     * foreground service while it runs, so the stream is replaced at once instead of
+     * waiting for its failure to surface (CARD V2-L19).
+     */
+    @Volatile
+    var onNetworkAvailable: (() -> Unit)? = null
+
     private val networkCallback = object : ConnectivityManager.NetworkCallback() {
+        override fun onAvailable(network: Network) {
+            try {
+                onNetworkAvailable?.invoke()
+            } catch (e: Throwable) {
+                e.printStackTrace()
+            }
+
+            super.onAvailable(network)
+        }
+
         override fun onLost(network: Network) {
             if (_status.value == false) return
 
