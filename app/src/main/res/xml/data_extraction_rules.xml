@@ -1,8 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Mnaseb SIM v0.3.0: nothing is backed up or transferred to another phone.
      The gateway registration, the signing key and the account tokens stay on this phone.
-     CARD-21: the device-protected copies (device_*) are excluded too; the gateway token,
-     the signing key and the message database live there. -->
+     CARD-21: the device-protected copies (device_*) hold the gateway token, the signing key and
+     the message database. They are NOT listed here: the AGP 8.1.2 lint (FullBackupContent, fatal
+     in lintVitalRelease) rejects the device_* domains in any file the manifest points at. They
+     stay out of backup and device transfer through android:allowBackup="false" on the
+     application element; DataExtractionRulesTest pins that attribute. -->
 <data-extraction-rules>
     <cloud-backup>
         <exclude domain="root" path="." />
@@ -10,10 +13,6 @@
         <exclude domain="database" path="." />
         <exclude domain="sharedpref" path="." />
         <exclude domain="external" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="device_file" path="." />
-        <exclude domain="device_database" path="." />
-        <exclude domain="device_sharedpref" path="." />
     </cloud-backup>
     <device-transfer>
         <exclude domain="root" path="." />
@@ -21,9 +20,5 @@
         <exclude domain="database" path="." />
         <exclude domain="sharedpref" path="." />
         <exclude domain="external" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="device_file" path="." />
-        <exclude domain="device_database" path="." />
-        <exclude domain="device_sharedpref" path="." />
     </device-transfer>
 </data-extraction-rules>

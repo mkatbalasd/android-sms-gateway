@@ -18,8 +18,9 @@ import me.capcom.smsgateway.modules.settings.get
  * exception as "paused" (see [PauseGate], [enqueueUnlessHeld] in the gateway module): the
  * pause fails closed, never open.
  *
- * Holds no secret: three timestamps/numbers. Excluded from backup by the extraction rules
- * (domain `device_sharedpref`).
+ * Holds no secret: three timestamps/numbers. Kept out of backup and device transfer by
+ * `android:allowBackup="false"` (the extraction rules cannot list the `device_*` domains, see
+ * data_extraction_rules.xml).
  */
 class DevicePauseStore(
     private val storage: KeyValueStorage,
