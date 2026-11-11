@@ -64,9 +64,12 @@ class HomeV2Fragment : Fragment() {
         PauseController(
             client, accountSettings,
             object : ServiceSwitch {
-                // The same stop and start as the legacy home screen.
+                // A pause stops only pulling and sending; the full start is the legacy one.
+                override fun pause() = orchestratorSvc.pause(appContext)
                 override fun start() = orchestratorSvc.start(appContext, false)
-                override fun stop() = orchestratorSvc.stop(appContext)
+
+                // The start is idempotent and, while paused, brings up reporting only.
+                override fun keepReporting() = orchestratorSvc.start(appContext, false)
             },
             staleSweep,
         )

@@ -82,4 +82,47 @@ internal class PauseHoldPullTest {
         val paused = Store(pausedAtMs = now - 200 * minute, resumedAtMs = now - 10 * minute)
         assertFalse(pull(message(null), paused).first)
     }
+
+    // region the order: the drop runs BEFORE the enqueue
+
+    private val calls = mutableListOf<String>()
+
+    private suspend fun enqueueFlow(message: GatewayApi.Message, store: Store) =
+        enqueueUnlessHeld(message, store, now, { calls.add("report:" + it.id) }) { calls.add("enqueue") }
+
+    @Test
+    fun aStaleMessageIsReportedAndNeverEnqueued() = runBlocking {
+        val store = Store(pausedAtMs = now - 200 * minute, resumedAtMs = now - 10 * minute)
+
+        enqueueFlow(message(now - 120 * minute), store)
+
+        assertEquals(listOf("report:m1"), calls)
+    }
+
+    @Test
+    fun aFreshMessageIsEnqueuedAndNotReported() = runBlocking {
+        val store = Store(pausedAtMs = now - 200 * minute, resumedAtMs = now - 10 * minute)
+
+        enqueueFlow(message(now - 5 * minute), store)
+
+        assertEquals(listOf("enqueue"), calls)
+    }
+
+    @Test
+    fun processMessageEnqueuesOnlyThroughTheDropRule() {
+        // GatewayService itself cannot be built in a JVM test: pin the wiring in its source.
+        val source = PauseGateSources.read("modules/gateway/GatewayService.kt")
+        val body = PauseGateSources.functionBody(source, "private suspend fun processMessage(")
+        assertTrue("processMessage must go through enqueueUnlessHeld", body.contains("enqueueUnlessHeld("))
+        assertFalse(
+            "processMessage must not enqueue directly: the lambda is the only enqueue",
+            body.replace(Regex("enqueueUnlessHeld\\([^}]*\\}"), "").contains("enqueueMessage(")
+        )
+        assertEquals(
+            "one enqueue call in the whole service",
+            1, Regex("messagesService\\.enqueueMessage\\(").findAll(source).count()
+        )
+    }
+
+    // endregion
 }

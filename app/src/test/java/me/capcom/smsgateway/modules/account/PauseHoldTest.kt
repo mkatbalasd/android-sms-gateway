@@ -26,8 +26,13 @@ internal class PauseHoldTest {
     private val events = mutableListOf<String>()
 
     private val services = object : ServiceSwitch {
+        override fun pause() { events.add("pause") }
         override fun start() { events.add("start") }
-        override fun stop() { events.add("stop") }
+        override fun keepReporting() { events.add("keepReporting") }
+    }
+
+    private val reporter = object : StateReporter {
+        override fun report(messageId: String) { events.add("report:$messageId") }
     }
 
     private class FakePending(
@@ -43,7 +48,7 @@ internal class PauseHoldTest {
     }
 
     private fun sweepOver(pending: FakePending, store: PauseStore, at: Long = now) =
-        StaleSweep(pending, store) { at }
+        StaleSweep(pending, store, reporter) { at }
 
     private fun controller(
         client: FakeAppClient,
@@ -61,7 +66,7 @@ internal class PauseHoldTest {
 
         controller(client, store).pause()
 
-        assertEquals(listOf("api:pause", "stop"), events)
+        assertEquals(listOf("api:pause", "pause"), events)
         assertEquals(now, store.pausedAtMs)
         assertNull("a new pause has no end yet", store.resumedAtMs)
         assertTrue(store.isPaused)
@@ -98,7 +103,7 @@ internal class PauseHoldTest {
             assertEquals(503, e.error.httpStatus)
         }
 
-        assertFalse(events.contains("stop"))
+        assertFalse(events.contains("pause"))
         assertFalse(store.isPaused)
     }
 
@@ -121,7 +126,7 @@ internal class PauseHoldTest {
 
         controller(client, store, pending).resume()
 
-        assertEquals(listOf("fail:old", "api:resume", "start"), events)
+        assertEquals(listOf("keepReporting", "fail:old", "report:old", "api:resume", "start"), events)
         assertEquals(listOf("old" to "TTL expired"), pending.failed)
         assertEquals(now, store.resumedAtMs)
         assertFalse(store.isPaused)
@@ -256,7 +261,7 @@ internal class PauseHoldTest {
             }
         }
 
-        val dropped = StaleSweep(failing, store) { now }.sweep()
+        val dropped = StaleSweep(failing, store, reporter) { now }.sweep()
 
         assertEquals(1, dropped)
         assertEquals(listOf("y"), failing.failed)
@@ -279,7 +284,7 @@ internal class PauseHoldTest {
         assertTrue(restored)
         assertTrue(store.isPaused)
         assertEquals(serverPausedAt, store.pausedAtMs)
-        assertEquals(listOf("stop"), events)
+        assertEquals(listOf("pause"), events)
     }
 
     @Test
@@ -327,21 +332,54 @@ internal class PauseHoldTest {
 
     // endregion
 
-    // region autostart and the paused flag
+    // region reporting while paused
 
     @Test
-    fun autostartIsSuppressedWhilePaused() {
-        assertTrue(PauseHold.shouldAutostart(autostartEnabled = true, paused = false))
-        assertFalse(PauseHold.shouldAutostart(autostartEnabled = true, paused = true))
-        assertFalse(PauseHold.shouldAutostart(autostartEnabled = false, paused = false))
-        assertFalse(PauseHold.shouldAutostart(autostartEnabled = false, paused = true))
+    fun aFailureRecordedWhilePausedReachesTheReporter() = runBlocking {
+        // Still paused: the sweep runs before the platform is told about the resume.
+        val store = FakeStore().apply { pausedAtMs = now - 100 * minute }
+        assertTrue(store.isPaused)
+        val pending = FakePending(
+            listOf(PendingStamp("held", now - 80 * minute), PendingStamp("fresh", now - 5 * minute)),
+            events,
+        )
+
+        sweepOver(pending, store).sweep()
+
+        assertEquals("the failure is reported, the fresh one is not", listOf("fail:held", "report:held"), events)
+        assertTrue(store.isPaused)
     }
 
     @Test
-    fun aResumedPhoneMayAutostartAgain() {
-        val store = FakeStore().apply { pausedAtMs = now - 100 * minute; resumedAtMs = now }
-        assertTrue(PauseHold.shouldAutostart(autostartEnabled = true, paused = store.isPaused))
+    fun theReportingPathIsMadeSureBeforeTheSweepAndNeverStoppedByAPause() = runBlocking {
+        val client = FakeAppClient()
+        val store = FakeStore().apply { pausedAtMs = now - 100 * minute }
+        val pending = FakePending(listOf(PendingStamp("held", now - 80 * minute)), events)
+
+        controller(client, store, pending).resume()
+
+        assertTrue(events.indexOf("keepReporting") < events.indexOf("fail:held"))
+        assertTrue(events.indexOf("report:held") < events.indexOf("start"))
+        // The switch has no "stop everything": a pause is only pause().
+        assertEquals(setOf("pause", "start", "keepReporting"), ServiceSwitch::class.java.methods.map { it.name }.toSet())
     }
+
+    @Test
+    fun aMessageThatCannotBeFailedIsNotReported() = runBlocking {
+        val store = FakeStore().apply { pausedAtMs = now - 200 * minute }
+        val failing = object : PendingStore {
+            override suspend fun pending() = listOf(PendingStamp("x", now - 90 * minute))
+            override suspend fun fail(id: String, reason: String) = throw IllegalStateException("gone")
+        }
+
+        StaleSweep(failing, store, reporter) { now }.sweep()
+
+        assertTrue(events.isEmpty())
+    }
+
+    // endregion
+
+    // region the paused flag
 
     @Test
     fun pausedIsTheLocalFlagOrTheServersWord() {

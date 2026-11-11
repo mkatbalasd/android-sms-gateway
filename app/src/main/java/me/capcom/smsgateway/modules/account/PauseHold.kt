@@ -49,10 +49,6 @@ object PauseHold {
     /** The screen is "paused" when the phone remembers it or the platform says so. */
     fun isPaused(local: Boolean, serverPaused: Boolean?): Boolean = local || serverPaused == true
 
-    /** Boot, app start and the keep-alive paths start the services only when this is true. */
-    fun shouldAutostart(autostartEnabled: Boolean, paused: Boolean): Boolean =
-        autostartEnabled && !paused
-
     /**
      * The server says paused and this phone does not know it (a new sign-in, a data clear,
      * a reinstall): the phone takes the pause over. [requestedAtMs] is when the answer was
@@ -85,17 +81,40 @@ interface PauseStore {
  * cannot be read is "not paused", so a storage fault never silences a phone for good.
  */
 object PauseGate {
-    fun isPaused(): Boolean = try {
-        GlobalContext.getOrNull()?.get<AccountSettings>()?.isPaused == true
-    } catch (e: Exception) {
-        false
+    internal val defaultProvider: () -> Boolean = {
+        try {
+            GlobalContext.getOrNull()?.get<AccountSettings>()?.isPaused == true
+        } catch (e: Exception) {
+            false
+        }
     }
+
+    /** Where the answer comes from; a test replaces it. */
+    @Volatile
+    internal var provider: () -> Boolean = defaultProvider
+
+    fun isPaused(): Boolean = provider()
 }
 
-/** The services of the phone as the pause control sees them. */
+/**
+ * The services of the phone as the pause control sees them. A pause stops only the
+ * pulling and the sending of messages: reporting (state events, delivery reports,
+ * the inbox) keeps running, because state events have no replay.
+ */
 interface ServiceSwitch {
+    /** Pause: no pull, no SSE or push triggered pull, no sending. Reporting stays up. */
+    fun pause()
+
+    /** Resume: the full start of every service. */
     fun start()
-    fun stop()
+
+    /** Makes sure the reporting path is up (it is idempotent); called before the resume sweep. */
+    fun keepReporting()
+}
+
+/** Reports the state of one local message to the platform, durably (WorkManager in production). */
+interface StateReporter {
+    fun report(messageId: String)
 }
 
 /**
@@ -114,18 +133,20 @@ class PauseController(
 
     suspend fun pause() {
         client.pauseDevice()
-        // Remembered before the stop, so a crash in between still blocks the autostart.
+        // Remembered before the stop, so a crash in between still keeps the pause.
         store.resumedAtMs = null
         store.pausedAtMs = clock()
-        services.stop()
+        services.pause()
     }
 
     /**
-     * Order: the local queue is swept, then the platform is told, then the services start.
+     * Order: the reporting path is made sure, the local queue is swept (its failures are
+     * reported at once), then the platform is told, then the services start.
      * Messages created before the resume are judged by the drop rule on every later pull.
      * If the platform cannot be reached nothing started and the phone stays paused: retry.
      */
     suspend fun resume() {
+        services.keepReporting()
         sweep.sweep()
         client.resumeDevice()
         store.resumedAtMs = clock()
@@ -137,7 +158,7 @@ class PauseController(
         if (!PauseHold.shouldRestore(serverPaused, store, requestedAtMs)) return false
         store.resumedAtMs = null
         store.pausedAtMs = serverPausedAtMs ?: clock()
-        services.stop()
+        services.pause()
         return true
     }
 }
@@ -155,10 +176,15 @@ interface PendingStore {
 class StaleSweep(
     private val store: PendingStore,
     private val settings: PauseStore,
+    private val reporter: StateReporter,
     private val clock: () -> Long = System::currentTimeMillis,
 ) {
 
-    /** @return how many messages were dropped. */
+    /**
+     * Every failure is reported at once through [reporter] (a durable job), not through the
+     * event bus alone: that has no replay, and the sweep runs while the phone is still paused.
+     * @return how many messages were dropped.
+     */
     suspend fun sweep(): Int {
         val pausedAt = settings.pausedAtMs ?: return 0
         val now = clock()
@@ -169,6 +195,7 @@ class StaleSweep(
             try {
                 store.fail(message.id, REASON)
                 dropped++
+                reporter.report(message.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {

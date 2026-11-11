@@ -3,8 +3,6 @@ package me.capcom.smsgateway.modules.orchestrator
 import android.content.Context
 import me.capcom.smsgateway.helpers.SettingsHelper
 import me.capcom.smsgateway.helpers.SubscriptionsHelper
-import me.capcom.smsgateway.modules.account.AccountSettings
-import me.capcom.smsgateway.modules.account.PauseHold
 import me.capcom.smsgateway.modules.device.DeviceService
 import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.incoming.IncomingMessagesService
@@ -29,14 +27,14 @@ class OrchestratorService(
     private val logsSvc: LogsService,
     private val deviceService: DeviceService,
     private val settings: SettingsHelper,
-    private val account: AccountSettings,
 ) {
     fun start(context: Context, autostart: Boolean) {
-        // Boot, app start and every keep-alive path come here with autostart = true;
-        // a phone the owner paused (V2-L23) stays stopped. A tap on «استئناف» is not an autostart.
-        if (autostart && !PauseHold.shouldAutostart(settings.autostart, account.isPaused)) {
+        if (autostart && !settings.autostart) {
             return
         }
+        // A paused phone (V2-L23) starts through here too (boot, app start): the pull worker,
+        // the live stream and the send worker refuse to run while it is paused (PauseGate),
+        // and everything that only reports keeps running.
 
         logsSvc.start(context)
         messagesSvc.start(context)
@@ -72,6 +70,16 @@ class OrchestratorService(
             WebHookEvent.AppStarted,
             AppStartedPayload(simCards)
         )
+    }
+
+    /**
+     * V2-L23: «إيقاف مؤقت». Stops only the pulling and the sending of messages. The event
+     * receiver, the state reports, the inbox and the receivers keep running: state events
+     * have no replay, so a stopped receiver would lose delivery reports and failures.
+     */
+    fun pause(context: Context) {
+        gatewaySvc.pausePulling(context)
+        messagesSvc.pauseSending(context)
     }
 
     fun stop(context: Context) {

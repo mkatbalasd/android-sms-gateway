@@ -95,6 +95,11 @@ class MessagesService(
         LogTruncateWorker.stop(context)
         SendMessagesWorker.stop(context)
     }
+
+    /** V2-L23: a paused phone sends nothing; the state machine and its reports keep working. */
+    fun pauseSending(context: Context) {
+        SendMessagesWorker.stop(context)
+    }
     //#endregion
 
     //#region Cancel

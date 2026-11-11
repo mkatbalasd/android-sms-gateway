@@ -72,6 +72,15 @@ class GatewayService(
         this._api = null
     }
 
+    /**
+     * V2-L23: «إيقاف مؤقت» stops only the pulling: the pull worker and the live stream.
+     * The events receiver and the state reports stay up (state events have no replay).
+     */
+    fun pausePulling(context: Context) {
+        SSEForegroundService.stop(context)
+        PullMessagesWorker.stop(context)
+    }
+
     fun isActiveLiveData(context: Context) = PullMessagesWorker.getStateLiveData(context)
     //endregion
 
@@ -299,9 +308,13 @@ class GatewayService(
 
         // V2-L23: a message that was held past the limit by the last pause is failed
         // before it is enqueued, so nothing can send it late.
-        if (handlePauseHold(message, pauseStore, System.currentTimeMillis(), ::sendState)) return
+        enqueueUnlessHeld(message, pauseStore, System.currentTimeMillis(), ::sendState) {
+            messagesService.enqueueMessage(toSendRequest(message))
+        }
+    }
 
-        val request = SendRequest(
+    private fun toSendRequest(message: GatewayApi.Message): SendRequest {
+        return SendRequest(
             EntitySource.Cloud,
             me.capcom.smsgateway.modules.messages.data.Message(
                 message.id,
@@ -336,7 +349,6 @@ class GatewayService(
                 priority = message.priority,
             )
         )
-        messagesService.enqueueMessage(request)
     }
 
     internal suspend fun sendState(
@@ -455,6 +467,22 @@ internal suspend fun handleCloudCancel(
     } catch (_: IllegalStateException) {
         // message not in Pending state — already sent/cancelled
     }
+}
+
+/**
+ * V2-L23: the only way a pulled message reaches the send queue. The drop rule runs first;
+ * [enqueue] is called only for a message that was not held too long, so a stale message
+ * is never enqueued.
+ */
+internal suspend fun enqueueUnlessHeld(
+    message: GatewayApi.Message,
+    store: me.capcom.smsgateway.modules.account.PauseStore,
+    nowMs: Long,
+    sendFailed: suspend (GatewayApi.MessagePatchRequest) -> Unit,
+    enqueue: suspend () -> Unit,
+) {
+    if (handlePauseHold(message, store, nowMs, sendFailed)) return
+    enqueue()
 }
 
 /**
