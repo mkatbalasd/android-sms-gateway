@@ -78,7 +78,11 @@ class AccountRepository(
     }
 
     /** Confirms the pending code. On success the app session is stored and the pending code is cleared. */
-    suspend fun verify(rawCode: String, expectTenantId: String? = null): VerifyOutcome {
+    suspend fun verify(
+        rawCode: String,
+        resign: Boolean = false,
+        ownerTenantId: String? = null,
+    ): VerifyOutcome {
         val pending = settings.pending ?: throw AccountException(AccountError("NO_PENDING", 0))
         val code = OtpDigits.normalize(rawCode)
         val answer = if (pending.kind == PendingVerification.KIND_SIGNUP) {
@@ -87,8 +91,11 @@ class AccountRepository(
             api.loginVerify(LoginVerifyRequest(pending.id, code, device()))
         }
         // A linked phone signing in again must be the account that owns it: another
-        // account's session and identity are dropped, never stored.
-        if (expectTenantId != null && answer.tenant?.id != expectTenantId) {
+        // account's session and identity are dropped, never stored. Fails closed: a linked
+        // phone with no known owner, or an answer with no tenant, is refused too. The
+        // other tenant's server session cannot be revoked from here (the app API has no
+        // sign-out call); its tokens are never written anywhere and are dropped.
+        if (resign && (ownerTenantId.isNullOrEmpty() || answer.tenant?.id != ownerTenantId)) {
             settings.pending = null
             throw AccountException(AccountError(ACCOUNT_MISMATCH, 0))
         }
@@ -98,6 +105,9 @@ class AccountRepository(
         if (session == null || session.access.isNullOrEmpty() || session.refresh.isNullOrEmpty()) {
             return VerifyOutcome(signedIn = false, enrolment = null, next = answer.next)
         }
+        // The new session is not yet tied to the linked phone on the platform: the
+        // re-attach must run (and is retried after a crash) before home polling resumes.
+        if (resign) settings.reattachPending = true
         settings.saveSession(session, now())
         return VerifyOutcome(signedIn = true, enrolment = answer.enrolment, next = answer.next)
     }

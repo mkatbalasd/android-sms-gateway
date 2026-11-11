@@ -88,9 +88,11 @@ internal class LinkedSignInAgainTest {
         val settings = revokedLinkedSettings()
         val repo = repo(settings) { verifyAnswer("t") }
 
-        val outcome = repo.verify("123456", expectTenantId = settings.tenantId)
+        val outcome = repo.verify("123456", resign = true, ownerTenantId = settings.tenantId)
 
         assertTrue(outcome.signedIn)
+        // The new session still has to be tied to the phone (the re-attach).
+        assertTrue(settings.reattachPending)
         assertEquals("new-a", settings.access)
         assertEquals("new-r", settings.refresh)
         assertTrue(settings.linked)
@@ -106,11 +108,12 @@ internal class LinkedSignInAgainTest {
         val repo = repo(settings) { verifyAnswer("other-tenant") }
 
         try {
-            repo.verify("123456", expectTenantId = settings.tenantId)
+            repo.verify("123456", resign = true, ownerTenantId = settings.tenantId)
             fail("expected a refusal")
         } catch (e: AccountException) {
             assertEquals(AccountRepository.ACCOUNT_MISMATCH, e.error.code)
         }
+        assertFalse(settings.reattachPending)
 
         assertFalse(settings.hasSession)
         assertNull(settings.access)
@@ -119,6 +122,25 @@ internal class LinkedSignInAgainTest {
         assertEquals("t", settings.tenantId)
         assertEquals("Demo", settings.tenantName)
         assertNull(settings.pending)
+    }
+
+    @Test
+    fun aLinkedPhoneWithNoKnownOwnerFailsClosed() = runBlocking {
+        val settings = AccountSettings(FakeKeyValueStorage())
+        settings.markLinked()
+        settings.pending = PendingVerification(
+            PendingVerification.KIND_LOGIN, "L1", null, null, null, null
+        )
+        val repo = repo(settings) { verifyAnswer("t") }
+
+        try {
+            repo.verify("123456", resign = true, ownerTenantId = settings.tenantId)
+            fail("expected a refusal")
+        } catch (e: AccountException) {
+            assertEquals(AccountRepository.ACCOUNT_MISMATCH, e.error.code)
+        }
+        assertFalse(settings.hasSession)
+        assertNull(settings.tenantId)
     }
 
     @Test

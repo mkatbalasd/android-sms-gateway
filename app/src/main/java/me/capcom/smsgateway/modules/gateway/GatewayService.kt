@@ -171,6 +171,7 @@ class GatewayService(
 
             this.settings.fcmToken = pushToken
             this.settings.registrationInfo = response
+            this.settings.recordContact()
 
             events.emit(
                 DeviceRegisteredEvent.Success(

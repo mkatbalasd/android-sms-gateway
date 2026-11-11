@@ -31,6 +31,7 @@ class AccountSettings(private val storage: KeyValueStorage) {
         val linked: Boolean? = null,
         val pending: PendingVerification? = null,
         val pendingCompletion: PendingCompletion? = null,
+        val reattachPending: Boolean? = null,
     ) {
         override fun toString() = "Stored(redacted)"
     }
@@ -100,6 +101,14 @@ class AccountSettings(private val storage: KeyValueStorage) {
     var pendingCompletion: PendingCompletion?
         get() = read().pendingCompletion
         set(value) = update { it.copy(pendingCompletion = value) }
+
+    /**
+     * True after a linked phone signed in again and until the platform tied the new app
+     * session to the phone (the re-attach). Survives a crash; cleared by [reset].
+     */
+    var reattachPending: Boolean
+        get() = read().reattachPending == true
+        set(value) = update { it.copy(reattachPending = value) }
 
     /** One write: linked, and nothing left to complete. */
     fun markLinked() = update { it.copy(linked = true, pendingCompletion = null) }

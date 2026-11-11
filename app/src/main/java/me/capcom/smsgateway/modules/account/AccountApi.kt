@@ -57,6 +57,8 @@ interface AppBackend {
     suspend fun handoff(access: String): HandoffResponse
     suspend fun keepAlive(access: String, checklist: KeepAliveChecklist)
     suspend fun unlink(access: String, password: String)
+    suspend fun reattachChallenge(access: String, request: ReattachChallengeRequest): ReattachChallenge
+    suspend fun reattach(access: String, request: ReattachRequest): ReattachResult
 }
 
 /**
@@ -163,6 +165,14 @@ class AccountApi(
     override suspend fun unlink(access: String, password: String) {
         send("/app/unlink", UnlinkRequest(password), access)
     }
+
+    override suspend fun reattachChallenge(
+        access: String,
+        request: ReattachChallengeRequest,
+    ): ReattachChallenge = parse(send("/app/device/reattach/challenge", request, access))
+
+    override suspend fun reattach(access: String, request: ReattachRequest): ReattachResult =
+        parse(send("/app/device/reattach", request, access))
 
     //endregion
 

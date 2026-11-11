@@ -386,8 +386,10 @@
     <string name="home_mode_test">Test mode</string>
     <string name="home_mode_live">Live sending on</string>
     <string name="home_status_checking">Checking the phone…</string>
-    <string name="home_status_working_now">Working ✓ · connected now</string>
     <string name="home_status_working">Working</string>
+    <string name="home_reattach_failed">Signed in, but this phone could not be tied to your account yet. The phone is still linked. Try again.</string>
+    <string name="home_reattach_not_found">This phone was not found in the account you signed in with. The phone is still linked.</string>
+    <string name="home_reattach_retry">Try again</string>
     <string name="home_session_ended">Your account sign-in ended. The phone is still linked and working.</string>
     <string name="home_session_signin">Sign in again</string>
     <string name="home_status_working_ago">Working · last connection %1$d min ago</string>

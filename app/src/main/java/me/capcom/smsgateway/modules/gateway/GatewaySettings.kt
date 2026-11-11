@@ -33,6 +33,10 @@ class GatewaySettings(
         get() = storage.get<Long>(LAST_CONTACT_AT_MS)
         private set(value) = storage.set(LAST_CONTACT_AT_MS, value)
 
+    fun clearContact() {
+        lastContactAtMs = null
+    }
+
     fun recordContact(nowMs: Long = System.currentTimeMillis()) {
         lastContactAtMs = nowMs
     }

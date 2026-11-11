@@ -25,6 +25,8 @@ import me.capcom.smsgateway.modules.account.AccountException
 import me.capcom.smsgateway.modules.account.AccountSettings
 import me.capcom.smsgateway.modules.account.AppClient
 import me.capcom.smsgateway.modules.account.AppHome
+import me.capcom.smsgateway.modules.account.DeviceReattach
+import me.capcom.smsgateway.modules.account.ReattachOutcome
 import me.capcom.smsgateway.modules.account.KeepAliveChecklist
 import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
@@ -52,6 +54,9 @@ class HomeV2Fragment : Fragment() {
 
     private val gatewaySettings: GatewaySettings by inject()
     private val pingSettings: PingSettings by inject()
+    private val reattach: DeviceReattach by inject()
+    private var reattachError: String? = null
+    private var reattachBusy = false
 
     private var home: AppHome? = null
     private var homeFailed = false
@@ -90,6 +95,12 @@ class HomeV2Fragment : Fragment() {
             startActivity(NumbersActivity.starter(requireContext()))
         }
         binding.cardHomeKeepAlive.setOnClickListener { showKeepAliveGuide() }
+        binding.buttonHomeReattach.setOnClickListener {
+            viewLifecycleOwner.lifecycleScope.launch {
+                reattachIfPending()
+                refresh()
+            }
+        }
         binding.buttonHomeSignIn.setOnClickListener {
             signInLauncher.launch(AccountActivity.starter(requireContext()))
         }
@@ -127,10 +138,30 @@ class HomeV2Fragment : Fragment() {
         pollJob?.cancel()
         pollJob = viewLifecycleOwner.lifecycleScope.launch {
             while (isActive) {
+                // After a sign-in again the new session is tied to this phone first.
+                // (A failed attempt waits for the retry button instead of repeating each minute.)
+                if (reattachError == null) reattachIfPending()
                 refresh()
                 reportKeepAlive()
                 delay(POLL_MS)
             }
+        }
+    }
+
+    /** Never unlinks and never enrols: a failure keeps the link and shows a retry. */
+    private suspend fun reattachIfPending() {
+        if (!accountSettings.linked || !accountSettings.hasSession || !accountSettings.reattachPending) {
+            reattachError = null
+            return
+        }
+        if (reattachBusy) return
+        reattachBusy = true
+        try {
+            val outcome = reattach.run()
+            reattachError = (outcome as? ReattachOutcome.Failed)?.code
+        } finally {
+            reattachBusy = false
+            render()
         }
     }
 
@@ -235,8 +266,22 @@ class HomeV2Fragment : Fragment() {
         val signIn = HomeStatus.sessionNeedsSignIn(
             accountSettings.linked, accountSettings.hasSession, homeErrorCode
         )
-        b.textHomeSession.isVisible = signIn
+        // Signed in again but not yet tied to this phone on the platform: a clear message
+        // and a retry; the gateway link is untouched either way.
+        val needsReattach = !signIn && reattachError != null && HomeStatus.sessionNeedsReattach(
+            accountSettings.linked, accountSettings.hasSession, homeErrorCode,
+            accountSettings.reattachPending
+        )
+        b.textHomeSession.isVisible = signIn || needsReattach
+        b.textHomeSession.setText(
+            when {
+                signIn -> R.string.home_session_ended
+                reattachError == DeviceReattach.DEVICE_NOT_FOUND -> R.string.home_reattach_not_found
+                else -> R.string.home_reattach_failed
+            }
+        )
         b.buttonHomeSignIn.isVisible = signIn
+        b.buttonHomeReattach.isVisible = needsReattach
 
         // The connection line is the gateway's own last contact, not the app session.
         val status = HomeStatus.phoneStatus(

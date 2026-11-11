@@ -38,20 +38,26 @@ enum class ApprovalCard { START, REVIEW, NEEDS_INFO, REJECTED }
 object HomeStatus {
 
     /** The gateway's last contact older than this is "not connecting" (a floor; see [offlineAfterMs]). */
-    const val FRESH_MS = 15 * 60_000L
+    const val OFFLINE_FLOOR_MS = 30 * 60_000L
 
-    /** Slack on top of the ping interval before a gap is worth mentioning. */
-    const val GRACE_MS = 2 * 60_000L
+    /** Slack on top of the expected gap (Doze and the work scheduler run late). */
+    const val GRACE_MS = 5 * 60_000L
 
-    /** The expected gap between contacts when no ping interval is set. */
-    const val DEFAULT_EXPECTED_MS = 5 * 60_000L
+    /**
+     * The real gap between contacts when no ping interval is set (the default): the pull
+     * worker's period (WorkManager's 15 minute minimum), plus pushes and the live stream.
+     */
+    const val DEFAULT_EXPECTED_MS = 15 * 60_000L
 
-    /** A gap up to this is normal: the ping interval plus a grace. */
-    fun expectedGapMs(pingIntervalSeconds: Int?): Long =
-        (pingIntervalSeconds?.takeIf { it > 0 }?.let { it * 1000L } ?: DEFAULT_EXPECTED_MS) + GRACE_MS
+    private fun baseGapMs(pingIntervalSeconds: Int?): Long =
+        pingIntervalSeconds?.takeIf { it > 0 }?.let { it * 1000L } ?: DEFAULT_EXPECTED_MS
 
+    /** A gap up to this is normal: the ping interval (or the pull period) plus a grace. */
+    fun expectedGapMs(pingIntervalSeconds: Int?): Long = baseGapMs(pingIntervalSeconds) + GRACE_MS
+
+    /** No contact for longer than this is «لا يتصل»: twice the expected gap, never under 30 minutes. */
     fun offlineAfterMs(pingIntervalSeconds: Int?): Long =
-        maxOf(FRESH_MS, 2 * expectedGapMs(pingIntervalSeconds))
+        maxOf(OFFLINE_FLOOR_MS, 2 * baseGapMs(pingIntervalSeconds))
 
     /**
      * The connection line comes from the gateway only ([lastContactAtMs]: its last good
@@ -86,6 +92,14 @@ object HomeStatus {
      * A linked phone whose app session is gone shows a sign-in action. Its gateway link,
      * device id and credentials are untouched; only the app session is asked for again.
      */
+    fun sessionNeedsReattach(
+        linked: Boolean,
+        hasSession: Boolean,
+        lastErrorCode: String?,
+        reattachPending: Boolean,
+    ): Boolean = linked && hasSession && reattachPending &&
+        !sessionNeedsSignIn(linked, hasSession, lastErrorCode)
+
     fun sessionNeedsSignIn(linked: Boolean, hasSession: Boolean, lastErrorCode: String?): Boolean =
         linked && (!hasSession || lastErrorCode in SESSION_ENDED_CODES)
 

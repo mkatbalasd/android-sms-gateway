@@ -25,6 +25,27 @@ import java.io.IOException
 
 enum class AccountScreen { WELCOME, PERMISSIONS, CREATE, SIGN_IN, CODE, LINKING }
 
+/** What the first-run screens do; pure, so the linked-phone rules are unit-tested. */
+object AccountRouting {
+    /** The screen the activity opens on (null: the welcome screen). */
+    fun start(linked: Boolean, hasSession: Boolean, codeWaiting: Boolean): AccountScreen? = when {
+        codeWaiting -> AccountScreen.CODE
+        // A linked phone never sees the welcome screen or an enrolment, whatever its session.
+        linked -> AccountScreen.SIGN_IN
+        hasSession -> AccountScreen.LINKING
+        else -> null
+    }
+
+    enum class AfterVerify { REATTACH, ENROL, SIGN_IN_NEXT }
+
+    /** After a good code: a linked phone re-attaches (no enrolment); a new one is enrolled. */
+    fun afterVerify(resign: Boolean, signedIn: Boolean): AfterVerify = when {
+        !signedIn -> AfterVerify.SIGN_IN_NEXT
+        resign -> AfterVerify.REATTACH
+        else -> AfterVerify.ENROL
+    }
+}
+
 /**
  * The state of the first-run account screens. It survives rotation; if the
  * process dies the sign-up or login waiting for its code is restored from the
@@ -62,27 +83,29 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     init {
         val waiting = settings.pending
-        when {
-            waiting != null -> {
+        when (AccountRouting.start(settings.linked, settings.hasSession, waiting != null)) {
+            AccountScreen.CODE -> {
                 pending.value = waiting
                 screen.value = AccountScreen.CODE
             }
 
-            settings.hasSession && !settings.linked -> {
+            AccountScreen.LINKING -> {
                 screen.value = AccountScreen.LINKING
                 startEnrolment(null)
             }
 
-            // A linked phone whose app session ended: only the sign-in screen, no enrolment.
-            isResignIn() -> screen.value = AccountScreen.SIGN_IN
+            // A linked phone: only the sign-in screen, never the welcome screen or an enrolment.
+            AccountScreen.SIGN_IN -> screen.value = AccountScreen.SIGN_IN
+            else -> Unit
         }
     }
 
     /**
-     * True for a phone that is already linked (gateway registered) but has no app session
-     * any more. It signs in again and keeps its link: no enrolment, no new registration.
+     * True for every phone that is already linked (gateway registered), whatever its app
+     * session looks like: every sign-in on it is a sign-in again that keeps the link. The
+     * tenant guard applies and no enrolment runs (it would register the phone again).
      */
-    fun isResignIn(): Boolean = settings.linked && !settings.hasSession
+    fun isResignIn(): Boolean = settings.linked
 
     //region Navigation
 
@@ -184,7 +207,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
         // Decided before the verify stores a session. The tenant that owns the linked phone
         // is the only account a sign-in again may bring back.
         val resign = isResignIn()
-        val ownerTenantId = if (resign) settings.tenantId else null
+        val ownerTenantId = settings.tenantId
         launchBusy(onFailure = { failure ->
             if (failure.code == AccountRepository.ACCOUNT_MISMATCH) {
                 pending.value = null
@@ -202,19 +225,23 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
             }
         }) {
             autofilled.value = fromSms
-            val outcome = withContext(Dispatchers.IO) { repository.verify(code, ownerTenantId) }
+            val outcome = withContext(Dispatchers.IO) { repository.verify(code, resign, ownerTenantId) }
             pending.value = null
-            if (!outcome.signedIn) {
-                // A repeat of a finished sign-up: no second session is minted from a spent code.
-                info.value = R.string.account_signup_signin_next
-                screen.value = AccountScreen.SIGN_IN
-            } else if (resign) {
+            when (AccountRouting.afterVerify(resign, outcome.signedIn)) {
+                AccountRouting.AfterVerify.SIGN_IN_NEXT -> {
+                    // A repeat of a finished sign-up: no second session is minted from a spent code.
+                    info.value = R.string.account_signup_signin_next
+                    screen.value = AccountScreen.SIGN_IN
+                }
+
                 // The app session is back and the link was never touched: no enrolment runs
-                // (it would register the phone again).
-                resignedIn.value = true
-            } else {
-                screen.value = AccountScreen.LINKING
-                startEnrolment(outcome.enrolment)
+                // (it would register the phone again). The home screen runs the re-attach.
+                AccountRouting.AfterVerify.REATTACH -> resignedIn.value = true
+
+                AccountRouting.AfterVerify.ENROL -> {
+                    screen.value = AccountScreen.LINKING
+                    startEnrolment(outcome.enrolment)
+                }
             }
         }
     }

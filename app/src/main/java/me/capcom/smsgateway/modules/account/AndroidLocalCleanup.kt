@@ -42,6 +42,7 @@ class AndroidLocalCleanup(
 
     override suspend fun forgetLink() {
         gatewaySettings.registrationInfo = null
+        gatewaySettings.clearContact()
         settingsHelper.autostart = false
         accountSettings.reset()
         KeepAliveGuideDialogFragment.forget(appContext)

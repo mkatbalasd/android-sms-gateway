@@ -58,39 +58,44 @@ internal class HomeStatusTest {
 
     @Test
     fun aGapWithinThePingIntervalAndGraceIsPlainWorking() {
-        // Ping every 5 minutes, grace 2: seven minutes is still normal.
-        val atEdge = HomeStatus.phoneStatus(healthy, now - 7 * minute, now, pingIntervalSeconds = 300)
+        // Ping every 5 minutes, grace 5: ten minutes is still normal.
+        val atEdge = HomeStatus.phoneStatus(healthy, now - 10 * minute, now, pingIntervalSeconds = 300)
         assertEquals(PhoneStatus.Working(null, false), atEdge)
     }
 
     @Test
     fun aGapPastThePingIntervalAndGraceNamesTheMinutes() {
-        val late = HomeStatus.phoneStatus(healthy, now - 8 * minute, now, pingIntervalSeconds = 300)
-        assertEquals(PhoneStatus.Working(8, false), late)
+        val late = HomeStatus.phoneStatus(healthy, now - 11 * minute, now, pingIntervalSeconds = 300)
+        assertEquals(PhoneStatus.Working(11, false), late)
     }
 
     @Test
     fun aShortPingIntervalMakesAShortGapWorthMentioning() {
-        // Ping every minute: three minutes is the edge, four is late.
+        // Ping every minute: six minutes is the edge, seven is late.
         assertEquals(
             PhoneStatus.Working(null, false),
-            HomeStatus.phoneStatus(healthy, now - 3 * minute, now, pingIntervalSeconds = 60)
+            HomeStatus.phoneStatus(healthy, now - 6 * minute, now, pingIntervalSeconds = 60)
         )
         assertEquals(
-            PhoneStatus.Working(4, false),
-            HomeStatus.phoneStatus(healthy, now - 4 * minute, now, pingIntervalSeconds = 60)
+            PhoneStatus.Working(7, false),
+            HomeStatus.phoneStatus(healthy, now - 7 * minute, now, pingIntervalSeconds = 60)
         )
     }
 
     @Test
-    fun withoutAPingIntervalTheDefaultGapApplies() {
+    fun withoutAPingIntervalTheDefaultIsThePullPeriod() {
+        // The default phone has no ping interval: contact comes every 15 minutes (the pull
+        // worker), so a 14 minute gap is normal and plain «يعمل» holds up to 20.
+        assertEquals(15 * minute, HomeStatus.DEFAULT_EXPECTED_MS)
+        for (min in listOf(1L, 14L, 15L, 20L)) {
+            assertEquals(
+                PhoneStatus.Working(null, false),
+                HomeStatus.phoneStatus(healthy, now - min * minute, now, pingIntervalSeconds = null)
+            )
+        }
         assertEquals(
-            PhoneStatus.Working(null, false),
-            HomeStatus.phoneStatus(healthy, now - 7 * minute, now, pingIntervalSeconds = null)
-        )
-        assertEquals(
-            PhoneStatus.Working(10, false),
-            HomeStatus.phoneStatus(healthy, now - 10 * minute, now)
+            PhoneStatus.Working(25, false),
+            HomeStatus.phoneStatus(healthy, now - 25 * minute, now)
         )
         // Zero or negative is "no interval", not "everything is late".
         assertEquals(HomeStatus.expectedGapMs(null), HomeStatus.expectedGapMs(0))
@@ -121,6 +126,8 @@ internal class HomeStatusTest {
     @Test
     fun aLinkedPhoneWithoutAnAppSessionOffersSignIn() {
         assertTrue(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = false, lastErrorCode = null))
+        // Every verify on a linked phone is a re-sign-in (tenant guard, no enrolment), so the
+        // action is safe to offer while a stale token is still stored.
         for (code in listOf("APP_SESSION_INVALID", "APP_SESSION_REVOKED", "NO_SESSION")) {
             assertTrue(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = true, lastErrorCode = code))
         }
@@ -133,6 +140,15 @@ internal class HomeStatusTest {
         assertFalse(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = true, lastErrorCode = "HTTP_503"))
         // An unlinked phone uses the welcome screens, not this action.
         assertFalse(HomeStatus.sessionNeedsSignIn(linked = false, hasSession = false, lastErrorCode = "APP_SESSION_INVALID"))
+    }
+
+    @Test
+    fun aSignedInAgainLinkedPhoneNeedsTheReattachUntilItIsDone() {
+        assertTrue(HomeStatus.sessionNeedsReattach(true, true, null, reattachPending = true))
+        assertFalse(HomeStatus.sessionNeedsReattach(true, true, null, reattachPending = false))
+        // Without a session the sign-in comes first.
+        assertFalse(HomeStatus.sessionNeedsReattach(true, false, null, reattachPending = true))
+        assertFalse(HomeStatus.sessionNeedsReattach(false, true, null, reattachPending = true))
     }
 
     @Test
@@ -160,11 +176,11 @@ internal class HomeStatusTest {
     fun aHealthyPhoneTheServerHasNotSeenForAWhileIsOffline() {
         assertEquals(
             PhoneStatus.Offline,
-            HomeStatus.phoneStatus(healthy, now - 16 * minute, now)
+            HomeStatus.phoneStatus(healthy, now - 31 * minute, now)
         )
         assertEquals(PhoneStatus.Offline, HomeStatus.phoneStatus(healthy, null, now))
-        // The edge: exactly fifteen minutes is still fresh.
-        assertTrue(HomeStatus.phoneStatus(healthy, now - 15 * minute, now) is PhoneStatus.Working)
+        // The edge: exactly thirty minutes (twice the pull period) is still working.
+        assertTrue(HomeStatus.phoneStatus(healthy, now - 30 * minute, now) is PhoneStatus.Working)
     }
 
     // endregion
