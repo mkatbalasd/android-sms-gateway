@@ -1,12 +1,14 @@
 package me.capcom.smsgateway.modules.account
 
 import android.content.Context
+import android.content.SharedPreferences
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.capcom.smsgateway.data.AppDatabase
 import me.capcom.smsgateway.helpers.SettingsHelper
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
+import me.capcom.smsgateway.modules.webhooks.WebhookPayloadStorage
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
 
 /** The phone side of [AppUnlink]. */
@@ -17,6 +19,8 @@ class AndroidLocalCleanup(
     private val settingsHelper: SettingsHelper,
     private val orchestrator: OrchestratorService,
     private val database: AppDatabase,
+    private val preferences: SharedPreferences,
+    private val payloads: WebhookPayloadStorage,
 ) : LocalCleanup {
 
     private val appContext: Context = context.applicationContext
@@ -45,6 +49,14 @@ class AndroidLocalCleanup(
         settingsHelper.autostart = false
         accountSettings.reset()
         KeepAliveGuideDialogFragment.forget(appContext)
+
+        // CARD-21: what the old link left in device-protected storage must not reach the next
+        // link: the webhook signing key, the encryption passphrase, the gateway tokens, and the
+        // payload files of the webhook queue (its rows go in purgeData).
+        withContext(Dispatchers.IO) {
+            preferences.edit().also { editor -> LinkSecrets.forget { editor.remove(it) } }.commit()
+            payloads.clearAll()
+        }
     }
 
     private companion object {

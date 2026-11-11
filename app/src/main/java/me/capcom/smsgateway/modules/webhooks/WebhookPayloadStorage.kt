@@ -62,8 +62,25 @@ class WebhookPayloadStorage(
         }
     }
 
+    /** Unlink: every payload file of the old link, in the device-protected and the legacy directory. */
+    fun clearAll() {
+        deleteAllIn(payloadDir)
+        try {
+            deleteAllIn(legacyDir)
+        } catch (e: Exception) {
+            // credential-encrypted storage is not available; nothing legacy can be read either
+        }
+    }
+
     companion object {
         private const val PAYLOAD_DIR_NAME = "webhook_payloads"
         private const val FILE_REF_PREFIX = "file:"
+
+        /** Deletes the files inside each directory (the directories stay; missing ones are skipped). */
+        fun deleteAllIn(vararg dirs: File) {
+            for (dir in dirs) {
+                dir.listFiles()?.forEach { it.delete() }
+            }
+        }
     }
 }

@@ -31,6 +31,8 @@ val accountModule = module {
             get(),
             get(),
             get(),
+            get<android.content.SharedPreferences>(),
+            get(),
         )
     }
     factory { AppUnlink(get<AppClient>(), get<LocalCleanup>()) }
