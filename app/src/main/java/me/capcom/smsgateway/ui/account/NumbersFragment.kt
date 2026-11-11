@@ -1,8 +1,6 @@
 package me.capcom.smsgateway.ui.account
 
 import android.os.Bundle
-import android.text.Editable
-import android.text.TextWatcher
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -12,6 +10,7 @@ import androidx.lifecycle.ViewModelProvider
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.databinding.FragmentNumbersBinding
 import me.capcom.smsgateway.databinding.ItemSimSlotBinding
+import me.capcom.smsgateway.modules.account.IntlPhone
 
 /** F1-6: «وجدنا شريحة في هذا الهاتف». Draws [NumberRow]s; all decisions live in [NumbersState]. */
 class NumbersFragment : Fragment() {
@@ -73,13 +72,23 @@ class NumbersFragment : Fragment() {
             // Only a keeper's tap counts; a redraw sets the box without calling back here.
             if (button.isPressed) viewModel.tick(slot, checked)
         }
-        item.editSlotNumber.addTextChangedListener(object : TextWatcher {
-            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) = Unit
-            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) = Unit
-            override fun afterTextChanged(s: Editable?) {
-                viewModel.type(slot, s?.toString().orEmpty())
+        // Several rows share the field child ids: never restore one row state into another.
+        item.phoneSlotNumber.isSaveFromParentEnabled = false
+        // OPTIONAL: empty means no hint, the carrier-asserted proof decides; the VM gets E.164 or "".
+        item.phoneSlotNumber.optional = true
+        item.phoneSlotNumber.onChanged = {
+            val field = item.phoneSlotNumber
+            when (val result = field.result()) {
+                is IntlPhone.Result.Valid -> viewModel.type(slot, result.e164)
+                IntlPhone.Result.Empty -> viewModel.type(slot, "")
+                IntlPhone.Result.Invalid -> {
+                    viewModel.type(slot, "")
+                    if (field.nationalText.count { it.isDigit() } >= 7) {
+                        field.setError(getString(R.string.intl_phone_error))
+                    }
+                }
             }
-        })
+        }
         return item
     }
 
@@ -98,11 +107,14 @@ class NumbersFragment : Fragment() {
         }
 
         val showField = !row.verified && row.asksForNumber
-        item.layoutSlotNumber.isVisible = showField
-        item.editSlotNumber.isEnabled = !row.busy
-        if (item.editSlotNumber.text?.toString().orEmpty() != row.typed) {
-            item.editSlotNumber.setText(row.typed)
-        }
+        item.phoneSlotNumber.isVisible = showField
+        item.phoneSlotNumber.setNumberEnabled(!row.busy)
+        item.phoneSlotNumber.setHint(
+            getString(
+                if (row.phase == RowPhase.NEEDS_NUMBER) R.string.numbers_type_number
+                else R.string.intl_phone_hint_optional
+            )
+        )
 
         val status = statusText(row)
         item.textSlotStatus.isVisible = status != null
