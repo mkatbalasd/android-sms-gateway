@@ -15,7 +15,6 @@ import me.capcom.smsgateway.modules.gateway.inbox.InboxUploadService
 import me.capcom.smsgateway.modules.gateway.inbox.InboxUploadWorker
 import me.capcom.smsgateway.modules.gateway.services.SSEForegroundService
 import me.capcom.smsgateway.modules.gateway.workers.PullMessagesWorker
-import me.capcom.smsgateway.modules.gateway.workers.SendStateWorker
 import me.capcom.smsgateway.modules.gateway.workers.SettingsUpdateWorker
 import me.capcom.smsgateway.modules.gateway.workers.WebhooksUpdateWorker
 import me.capcom.smsgateway.modules.localserver.domain.SimCard
@@ -36,6 +35,7 @@ class GatewayService(
     private val events: EventBus,
     private val logsService: LogsService,
     private val deviceService: DeviceService,
+    private val scheduler: WorkScheduler,
 ) {
     private val eventsReceiver by lazy { EventsReceiver() }
 
@@ -56,6 +56,13 @@ class GatewayService(
         WebhooksUpdateWorker.start(context)
         SettingsUpdateWorker.start(context)
         InboxUploadWorker.start(context)
+
+        eventsReceiver.start()
+    }
+
+    /** CARD-21: before the first unlock only the events collector runs; no WorkManager. */
+    fun startLocked() {
+        if (!settings.enabled) return
 
         eventsReceiver.start()
     }
@@ -282,7 +289,7 @@ class GatewayService(
 
         val messageState = messagesService.getMessage(message.id)
         if (messageState != null) {
-            SendStateWorker.start(context, message.id)
+            scheduler.sendState(message.id)
             return
         }
 

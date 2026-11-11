@@ -24,7 +24,9 @@ import me.capcom.smsgateway.data.entities.MessageWithRecipients
 import me.capcom.smsgateway.domain.EntitySource
 import me.capcom.smsgateway.domain.MessageContent
 import me.capcom.smsgateway.domain.ProcessingState
+import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.helpers.PhoneHelper
+import me.capcom.smsgateway.modules.gateway.WorkScheduler
 import me.capcom.smsgateway.helpers.SubscriptionsHelper
 import me.capcom.smsgateway.modules.encryption.EncryptionService
 import me.capcom.smsgateway.modules.health.domain.CheckResult
@@ -52,6 +54,7 @@ class MessagesService(
     private val machine: MessageStateService,
     private val logsService: LogsService,
     private val mmsSender: MmsSender,
+    private val scheduler: WorkScheduler,
 ) {
     /**
      * Serializes the worker (KEEP/REPLACE) decisions made from the DB snapshot
@@ -131,13 +134,12 @@ class MessagesService(
             }
 
             if (startTime == SendMessagesWorker.IMMEDIATE) {
-                SendMessagesWorker.start(
-                    context,
+                scheduler.sendMessages(
                     nextScheduled != null || priority >= Message.PRIORITY_EXPEDITED,
                     SendMessagesWorker.IMMEDIATE
                 )
             } else {
-                SendMessagesWorker.start(context, true, startTime)
+                scheduler.sendMessages(true, startTime)
             }
 
             return message
@@ -280,6 +282,13 @@ class MessagesService(
 
             while (true) {
                 val message = messages.getPending(settings.processingOrder) ?: return
+                // CARD-21: an MMS needs credential-encrypted files; it waits for the unlock
+                // (the run stops here, the full start after the unlock sends it).
+                if (message.message.content is MessageContent.Mms
+                    && !DeviceStorage.isUnlocked(context)
+                ) {
+                    return
+                }
                 delay(1L)
 
                 val priority = message.params.priority ?: Message.PRIORITY_DEFAULT
@@ -321,7 +330,7 @@ class MessagesService(
                     // After processing all pending messages, check if there are any scheduled messages for the future
                     val nextScheduledTime = dao.nextScheduledTime() ?: 0
                     if (nextScheduledTime > System.currentTimeMillis()) {
-                        SendMessagesWorker.start(context, true, nextScheduledTime)
+                        scheduler.sendMessages(true, nextScheduledTime)
                     }
                 }
             }
@@ -362,7 +371,7 @@ class MessagesService(
                     )
                     false
                 } else {
-                    SendMessagesWorker.start(context, true, nextStart)
+                    scheduler.sendMessages(true, nextStart)
                     true
                 }
             }

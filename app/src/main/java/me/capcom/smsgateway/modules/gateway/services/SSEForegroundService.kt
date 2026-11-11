@@ -13,7 +13,7 @@ import me.capcom.smsgateway.helpers.SSEManager
 import me.capcom.smsgateway.modules.events.ExternalEvent
 import me.capcom.smsgateway.modules.events.ExternalEventType
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
-import me.capcom.smsgateway.modules.gateway.workers.PullMessagesWorker
+import me.capcom.smsgateway.modules.gateway.WorkScheduler
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.notifications.NotificationsService
@@ -22,6 +22,7 @@ import org.koin.android.ext.android.inject
 
 class SSEForegroundService : Service() {
     private val settings: GatewaySettings by inject()
+    private val scheduler: WorkScheduler by inject()
 
     private val eventsRouter by inject<EventsRouter>()
 
@@ -53,7 +54,7 @@ class SSEForegroundService : Service() {
                 onConnected = {
                     Log.d("SSEForegroundService", "SSE connected, pulling pending messages")
                     try {
-                        PullMessagesWorker.start(this@SSEForegroundService)
+                        scheduler.pullMessages()
                     } catch (e: Throwable) {
                         e.printStackTrace()
                         logsService.insert(

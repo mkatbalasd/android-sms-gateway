@@ -65,6 +65,7 @@ class App: Application() {
                 orchestratorModule,
                 deviceModule,
                 me.capcom.smsgateway.modules.account.accountModule,
+                me.capcom.smsgateway.modules.gateway.workSchedulerModule,
             )
         }
 
