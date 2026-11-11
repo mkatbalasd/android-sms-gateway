@@ -326,7 +326,14 @@ class MessagesService(
                     continue
                 }
 
-                if (!withContext(NonCancellable) { sendMessage(message) }) {
+                // A pause can land during any delay above (delay(1L), the rate limit, the
+                // work hours): check again immediately before the send. Paused: the message
+                // stays Pending and the run ends; the resume starts the sender again.
+                val sent = sendUnlessPaused(
+                    { me.capcom.smsgateway.modules.account.PauseGate.isPaused() }
+                ) { withContext(NonCancellable) { sendMessage(message) } }
+                    ?: return
+                if (!sent) {
                     // if message was not sent - don't need any delay before next message
                     continue
                 }

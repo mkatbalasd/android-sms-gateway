@@ -37,7 +37,15 @@ class DevicePauseStore(
 
     @Synchronized
     private fun read(): Stored {
-        val stored = storage.get<Stored>(KEY)
+        val stored = try {
+            storage.get<Stored>(KEY)
+        } catch (e: Exception) {
+            // A corrupt value (the store could not parse it). Never "not paused": it is
+            // rewritten as a clean PAUSED state, so the reads work again and the resume
+            // (which only sets resumedAtMs) recovers the phone without an unlink. pausedAtMs=0
+            // makes the resume sweep and the pull drop rule judge a message by its own age.
+            return rewriteCorrupt()
+        }
         if (stored?.migrated == true) return stored
 
         if (!isUnlocked()) {
@@ -48,6 +56,12 @@ class DevicePauseStore(
         val copied = Stored(old.pausedAtMs, old.resumedAtMs, old.holdMaxMin, migrated = true)
         storage.set(KEY, copied)
         return copied
+    }
+
+    private fun rewriteCorrupt(): Stored {
+        val clean = Stored(pausedAtMs = 0L, resumedAtMs = null, holdMaxMin = null, migrated = true)
+        storage.set(KEY, clean)
+        return clean
     }
 
     @Synchronized
