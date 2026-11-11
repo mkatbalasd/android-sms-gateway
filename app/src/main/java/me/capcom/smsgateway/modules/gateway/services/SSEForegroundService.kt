@@ -10,6 +10,7 @@ import android.os.PowerManager
 import android.util.Log
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.helpers.SSEManager
+import me.capcom.smsgateway.modules.account.PauseGate
 import me.capcom.smsgateway.modules.connection.ConnectionService
 import me.capcom.smsgateway.modules.events.ExternalEvent
 import me.capcom.smsgateway.modules.events.ExternalEventType
@@ -107,7 +108,10 @@ class SSEForegroundService : Service() {
         }
 
         // CARD V2-L19: replace the stream as soon as the network is back.
-        connectionService.onNetworkAvailable = { sseManager.reconnectNow() }
+        connectionService.onNetworkAvailable = {
+            // V2-L23: never reconnect while paused (the stream is torn down by the pause).
+            if (!PauseGate.isPaused()) sseManager.reconnectNow()
+        }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -166,6 +170,9 @@ class SSEForegroundService : Service() {
 
     companion object {
         fun start(context: Context) {
+            // V2-L23: a paused phone keeps no live stream (resume starts it again).
+            if (PauseGate.isPaused()) return
+
             val intent = Intent(context, SSEForegroundService::class.java)
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {

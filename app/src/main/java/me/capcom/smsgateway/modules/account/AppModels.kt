@@ -85,6 +85,11 @@ data class AppHome(
     val devices: List<HomeDevice>?,
     @SerializedName("test_recipients") val testRecipients: HomeRecipients?,
     @SerializedName("keep_alive_pending") val keepAlivePending: Boolean?,
+    /** V2-L23: the owner paused this phone on the platform. Absent from an older platform. */
+    val paused: Boolean? = null,
+    @SerializedName("paused_at") val pausedAt: String? = null,
+    /** The platform's hold limit in minutes (top level of app-home); the phone falls back to 60. */
+    @SerializedName("pause_hold_max_min") val pauseHoldMaxMin: Int? = null,
 )
 
 data class TestRecipient(

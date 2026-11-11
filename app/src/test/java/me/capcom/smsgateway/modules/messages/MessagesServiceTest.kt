@@ -81,6 +81,9 @@ class MessagesServiceTest {
         override fun getPendingLifo(now: Date): MessageWithRecipients? =
             throw UnsupportedOperationException("not used in dispatch test")
 
+        override suspend fun selectPendingStamps(): List<me.capcom.smsgateway.modules.account.PendingStamp> =
+            throw UnsupportedOperationException("not used in dispatch test")
+
         override fun nextScheduledTime(): Long? =
             throw UnsupportedOperationException("not used in dispatch test")
 

@@ -382,6 +382,14 @@
     <string name="home_status_stopped_sim">متوقف — لا توجد شريحة</string>
     <string name="home_status_offline">الهاتف لا يتصل</string>
     <string name="home_start_service">تشغيل</string>
+    <string name="home_status_paused">متوقف مؤقتًا</string>
+    <string name="home_pause">إيقاف مؤقت</string>
+    <string name="home_resume">استئناف</string>
+    <string name="home_pause_confirm_title">إيقاف هذا الهاتف مؤقتًا؟</string>
+    <string name="home_pause_confirm_message">الرسائل التي تصل أثناء الإيقاف تنتظر حتى %1$d دقيقة ثم تُلغى ولا تُرسل متأخرة، ويُعاد رصيدها.</string>
+    <string name="home_pause_confirm_yes">إيقاف مؤقت</string>
+    <string name="home_pause_failed">تعذّر الإيقاف المؤقت. تأكد من اتصال الإنترنت؛ الهاتف ما زال يعمل.</string>
+    <string name="home_resume_failed">تعذّر الاستئناف. تأكد من اتصال الإنترنت وحاول مرة أخرى.</string>
     <string name="home_keep_alive_left">أبقِ الهاتف يعمل: %1$d خطوات متبقية ›</string>
     <string name="home_keep_alive_waiting">أبقِ الهاتف يعمل: بانتظار ليلة كاملة من الاتصال ›</string>
     <string name="home_numbers">الأرقام</string>

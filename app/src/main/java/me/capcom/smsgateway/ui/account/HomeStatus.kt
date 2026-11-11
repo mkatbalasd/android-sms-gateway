@@ -4,6 +4,7 @@ import me.capcom.smsgateway.helpers.KeepAliveGuideState
 import me.capcom.smsgateway.modules.account.AppHome
 import me.capcom.smsgateway.modules.account.HomeDevice
 import me.capcom.smsgateway.modules.account.IsoTime
+import me.capcom.smsgateway.modules.account.PauseHold
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -29,6 +30,9 @@ sealed class PhoneStatus {
 
     /** «الهاتف لا يتصل»: the phone looks fine but the gateway has had no contact lately. */
     object Offline : PhoneStatus()
+
+    /** «متوقف مؤقتًا»: the owner paused the phone (V2-L23); not an error and not offline. */
+    object Paused : PhoneStatus()
 
     enum class Reason { SERVICE, PERMISSION, SIM }
 }
@@ -69,7 +73,10 @@ object HomeStatus {
         lastContactAtMs: Long?,
         nowMs: Long,
         pingIntervalSeconds: Int? = null,
+        paused: Boolean = false,
     ): PhoneStatus {
+        // A paused phone has its services stopped on purpose (V2-L23): never Stopped or Offline.
+        if (paused) return PhoneStatus.Paused
         when {
             !local.smsPermissionGranted -> return PhoneStatus.Stopped(PhoneStatus.Reason.PERMISSION)
             !local.serviceRunning -> return PhoneStatus.Stopped(PhoneStatus.Reason.SERVICE)
@@ -84,6 +91,10 @@ object HomeStatus {
         if (age <= expectedGapMs(pingIntervalSeconds)) return PhoneStatus.Working(null, note)
         return PhoneStatus.Working((age / 60_000L).toInt(), note)
     }
+
+    /** Paused when the phone remembers the pause or the platform's home says so. */
+    fun isPaused(localPaused: Boolean, home: AppHome?): Boolean =
+        PauseHold.isPaused(localPaused, home?.paused)
 
     /** Server answers that mean the app session is over (revoked, expired, never there). */
     val SESSION_ENDED_CODES = setOf("APP_SESSION_INVALID", "APP_SESSION_REVOKED", "NO_SESSION")
