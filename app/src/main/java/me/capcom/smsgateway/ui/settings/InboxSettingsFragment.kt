@@ -8,6 +8,7 @@ import me.capcom.smsgateway.R
 
 class InboxSettingsFragment : BasePreferenceFragment() {
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.setStorageDeviceProtected() // CARD-21
         setPreferencesFromResource(R.xml.inbox_preferences, rootKey)
     }
 

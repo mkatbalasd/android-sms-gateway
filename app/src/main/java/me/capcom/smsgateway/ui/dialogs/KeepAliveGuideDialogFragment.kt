@@ -15,6 +15,7 @@ import androidx.fragment.app.DialogFragment
 import androidx.preference.PreferenceManager
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.databinding.DialogKeepAliveGuideBinding
+import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.helpers.KeepAliveGuideState
 import me.capcom.smsgateway.helpers.KeepAliveGuideState.Row
 import me.capcom.smsgateway.helpers.OemAutostart
@@ -172,7 +173,7 @@ class KeepAliveGuideDialogFragment : DialogFragment() {
         fun newInstance() = KeepAliveGuideDialogFragment()
 
         private fun prefs(context: Context) =
-            PreferenceManager.getDefaultSharedPreferences(context)
+            PreferenceManager.getDefaultSharedPreferences(DeviceStorage.deContext(context))
 
         private fun markShown(context: Context) {
             prefs(context).edit { putBoolean(PREF_SHOWN, true) }

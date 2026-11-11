@@ -29,7 +29,9 @@ class WebhooksSigningKeyScreenTest {
     private val key = "Zq7RmT4xKc9LpV2nBd8WfHs3JyGa6UeN"
 
     private val context get() = InstrumentationRegistry.getInstrumentation().targetContext
-    private val prefs get() = PreferenceManager.getDefaultSharedPreferences(context)
+    private val prefs get() = PreferenceManager.getDefaultSharedPreferences(
+        me.capcom.smsgateway.helpers.DeviceStorage.deContext(context)
+    )
     private var previous: String? = null
 
     @Before

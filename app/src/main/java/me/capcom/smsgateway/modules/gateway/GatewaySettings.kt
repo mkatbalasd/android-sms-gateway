@@ -22,7 +22,8 @@ class GatewaySettings(
 
     var registrationInfo: GatewayApi.DeviceRegisterResponse?
         get() = storage.get(REGISTRATION_INFO)
-        set(value) = storage.set(REGISTRATION_INFO, value)
+        // CARD-21: the gateway password is never stored (it would sit in device-protected storage).
+        set(value) = storage.set(REGISTRATION_INFO, value?.copy(password = null))
 
     var fcmToken: String?
         get() = storage.get(FCM_TOKEN)

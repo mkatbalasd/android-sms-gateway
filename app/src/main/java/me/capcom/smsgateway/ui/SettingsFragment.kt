@@ -109,6 +109,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.setStorageDeviceProtected() // CARD-21
         setPreferencesFromResource(R.xml.root_preferences, rootKey)
         applyVisibility()
 

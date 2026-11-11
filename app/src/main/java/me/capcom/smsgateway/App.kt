@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import healthModule
 import me.capcom.smsgateway.data.dbModule
+import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.helpers.LocaleHelper
 import me.capcom.smsgateway.modules.connection.connectionModule
 import me.capcom.smsgateway.modules.device.deviceModule
@@ -32,6 +33,9 @@ import org.koin.core.context.startKoin
 
 class App: Application() {
     override fun attachBaseContext(base: Context?) {
+        // CARD-21: move preferences + database to device-protected storage, once, before
+        // anything opens them. Never runs while the user is locked.
+        base?.let { DeviceStorage.migrateOnce(it) }
         super.attachBaseContext(base?.let { LocaleHelper.onAttach(it) })
     }
 
