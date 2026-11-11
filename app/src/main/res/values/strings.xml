@@ -371,6 +371,7 @@
     <string name="intl_phone_hint">Mobile number</string>
     <string name="intl_phone_hint_optional">Number of this SIM (optional)</string>
     <string name="intl_phone_error">Enter a valid mobile number for the selected country</string>
+    <string name="intl_phone_choose_country">Choose country</string>
     <string name="intl_phone_country_desc">Country and dial code</string>
     <string name="numbers_cost_note">To check, the phone sends one message from each SIM to a Mnaseb line (at the cost of one message).</string>
     <string name="numbers_verify_now">Check now</string>

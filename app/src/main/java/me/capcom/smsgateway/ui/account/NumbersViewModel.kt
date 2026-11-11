@@ -42,7 +42,7 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
         started = true
         viewModelScope.launch {
             val sims = SubscriptionsHelper.getActiveSimCards(getApplication<Application>()).map {
-                SimSlot(it.simNumber, it.carrierName, it.phoneNumber)
+                SimSlot(it.simNumber, it.carrierName, it.phoneNumber, it.countryIso)
             }
             val lines = try {
                 client.lines()

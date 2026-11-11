@@ -79,6 +79,19 @@ object IntlPhone {
         return PhoneHelper.validMobileOrNull("+" + country.dial + significant)
     }
 
+    /** An E.164 number back into its country and national digits, to restore the field. Null if unknown. */
+    fun split(e164: String?): Pair<PhoneCountry, String>? {
+        if (e164.isNullOrBlank()) return null
+        val util = PhoneNumberUtil.getInstance()
+        return try {
+            val parsed = util.parse(e164, null)
+            val iso = util.getRegionCodeForNumber(parsed) ?: return null
+            PhoneCountry(iso, parsed.countryCode) to util.getNationalSignificantNumber(parsed)
+        } catch (e: NumberParseException) {
+            null
+        }
+    }
+
     /** For a REQUIRED field (sign-up): empty is invalid. */
     fun required(country: PhoneCountry?, national: String): Result =
         e164(country, national)?.let { Result.Valid(it) } ?: Result.Invalid

@@ -19,9 +19,10 @@ import java.util.Locale
 
 /**
  * The international phone field: a country (name and dial code) selector plus the national
- * number. The country is preselected from the SIM country, else the network country, else the
- * device locale, and the customer can change it. The number itself is never prefilled.
- * All rules live in [IntlPhone].
+ * number. The caller preselects the country ([preselect]); the customer can change it. Until a
+ * country is known or chosen the selector shows a "Choose country" placeholder and [country]
+ * is null, so a number is never read against a country nobody chose. The number itself is
+ * never prefilled. All rules live in [IntlPhone].
  */
 class IntlPhoneView @JvmOverloads constructor(
     context: Context,
@@ -48,12 +49,13 @@ class IntlPhoneView @JvmOverloads constructor(
 
         val locale = Locale.getDefault()
         countries = IntlPhone.countries(locale)
+        // Position 0 is the placeholder; countries start at 1.
         spinner.adapter = ArrayAdapter(
             context,
             android.R.layout.simple_spinner_dropdown_item,
-            countries.map { "${it.displayName(locale)} (+${it.dial})" }
+            listOf(context.getString(R.string.intl_phone_choose_country)) +
+                countries.map { "${it.displayName(locale)} (+${it.dial})" }
         )
-        select(IntlPhone.preselect(simIso(), networkIso(), locale.country))
         spinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
                 layout.error = null
@@ -68,13 +70,31 @@ class IntlPhoneView @JvmOverloads constructor(
         }
     }
 
-    val country: PhoneCountry? get() = countries.getOrNull(spinner.selectedItemPosition)
+    /** The chosen country, or null while the placeholder is showing. */
+    val country: PhoneCountry? get() = countries.getOrNull(spinner.selectedItemPosition - 1)
 
     var nationalText: String
         get() = edit.text?.toString().orEmpty()
         set(value) {
             if (nationalText != value) edit.setText(value)
         }
+
+    /**
+     * Preselects from [simIso] (the SIM's own country, for a slot row: that slot's SIM), else
+     * the network country, else the device locale. Leaves the placeholder when none is known.
+     */
+    fun preselect(simIso: String?) {
+        select(IntlPhone.preselect(simIso, networkIso(), Locale.getDefault().country))
+    }
+
+    /** Preselects from the phone's default SIM (sign-up has no slot). */
+    fun preselectDefault() = preselect(runCatching { telephony()?.simCountryIso }.getOrNull())
+
+    /** Restores a country and national number (after rotation), without calling [onChanged]. */
+    fun setValue(country: PhoneCountry?, national: String) {
+        select(country)
+        nationalText = national
+    }
 
     /** The field's value by its rule: required (sign-up) or [optional] (verify screen). */
     fun result(): IntlPhone.Result =
@@ -95,13 +115,11 @@ class IntlPhoneView @JvmOverloads constructor(
 
     private fun select(country: PhoneCountry?) {
         val index = countries.indexOfFirst { it.iso == country?.iso }
-        if (index >= 0) spinner.setSelection(index, false)
+        spinner.setSelection(if (index >= 0) index + 1 else 0, false)
     }
 
     private fun telephony(): TelephonyManager? =
         context.getSystemService(Context.TELEPHONY_SERVICE) as? TelephonyManager
-
-    private fun simIso(): String? = runCatching { telephony()?.simCountryIso }.getOrNull()
 
     private fun networkIso(): String? = runCatching { telephony()?.networkCountryIso }.getOrNull()
 }

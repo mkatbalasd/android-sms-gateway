@@ -74,18 +74,21 @@ class NumbersFragment : Fragment() {
         }
         // Several rows share the field child ids: never restore one row state into another.
         item.phoneSlotNumber.isSaveFromParentEnabled = false
+        val field = item.phoneSlotNumber
         // OPTIONAL: empty means no hint, the carrier-asserted proof decides; the VM gets E.164 or "".
-        item.phoneSlotNumber.optional = true
-        item.phoneSlotNumber.onChanged = {
-            val field = item.phoneSlotNumber
+        field.optional = true
+        // After a rotation this row is new: restore what the VM holds, else this SIM's own country.
+        val restored = IntlPhone.split(row.typed)
+        if (restored != null) field.setValue(restored.first, restored.second) else field.preselect(row.countryIso)
+        field.onChanged = {
             when (val result = field.result()) {
                 is IntlPhone.Result.Valid -> viewModel.type(slot, result.e164)
                 IntlPhone.Result.Empty -> viewModel.type(slot, "")
                 IntlPhone.Result.Invalid -> {
+                    // Treated as empty (and, when the platform asked for a number, the action
+                    // stays disabled), but never silently: say so for any non-empty input.
                     viewModel.type(slot, "")
-                    if (field.nationalText.count { it.isDigit() } >= 7) {
-                        field.setError(getString(R.string.intl_phone_error))
-                    }
+                    field.setError(getString(R.string.intl_phone_error))
                 }
             }
         }

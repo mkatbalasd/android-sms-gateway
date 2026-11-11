@@ -182,8 +182,10 @@ class CreateAccountFragment : Fragment() {
         binding.textTerms.movementMethod = LinkMovementMethod.getInstance()
         binding.textTerms.text = getText(R.string.account_terms_checkbox)
 
-        // The country is preselected by the field itself; the number is never prefilled
-        // (not from the SIM, never an IMSI): the customer types it.
+        // Only the country is preselected (the SIM, else the network, else the locale); the
+        // number is never prefilled (not from the SIM, never an IMSI): the customer types it.
+        // After a rotation the field restores its own country and number.
+        if (savedInstanceState == null) binding.phoneMobile.preselectDefault()
 
         binding.buttonCreateSubmit.setOnClickListener { submit(viewModel) }
         binding.buttonCreateBack.setOnClickListener { viewModel.back() }
@@ -201,7 +203,6 @@ class CreateAccountFragment : Fragment() {
     }
 
     private fun submit(viewModel: AccountViewModel) {
-        val ctx = requireContext()
         binding.layoutBusinessName.error = null
         binding.phoneMobile.setError(null)
         binding.layoutPassword.error = null
