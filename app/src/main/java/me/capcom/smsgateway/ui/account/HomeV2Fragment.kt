@@ -390,7 +390,15 @@ class HomeV2Fragment : Fragment() {
 
     //region Actions
 
-    private fun isPausedNow(): Boolean = HomeStatus.isPaused(pauseStore.isPaused, home)
+    // An unreadable pause state shows as paused (fail closed); the resume repairs it.
+    private fun isPausedNow(): Boolean = HomeStatus.isPaused(
+        try {
+            pauseStore.isPaused
+        } catch (e: Exception) {
+            true
+        },
+        home
+    )
 
     /**
      * Keeps the platform's hold limit, and takes over a pause the platform knows and this
