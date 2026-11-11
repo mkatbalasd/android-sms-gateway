@@ -12,7 +12,14 @@ import me.capcom.smsgateway.R
 import me.capcom.smsgateway.helpers.SSEManager
 import me.capcom.smsgateway.modules.events.ExternalEvent
 import me.capcom.smsgateway.modules.events.ExternalEventType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
+import me.capcom.smsgateway.modules.gateway.Heartbeat
+import me.capcom.smsgateway.modules.ping.PingSettings
 import me.capcom.smsgateway.modules.gateway.WorkScheduler
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
@@ -38,6 +45,20 @@ class SSEForegroundService : Service() {
         (getSystemService(Context.WIFI_SERVICE) as WifiManager).createWifiLock(
             WifiManager.WIFI_MODE_FULL_HIGH_PERF,
             this.javaClass.name
+        )
+    }
+
+    private val gatewayService: GatewayService by inject()
+    private val pingSettings: PingSettings by inject()
+
+    // CARD-21: an authenticated pull at start and every 300 s (floor 60), independent of
+    // WorkManager, so the platform sees the phone well inside its 15-minute threshold.
+    private val heartbeatScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val heartbeat by lazy {
+        Heartbeat(
+            heartbeatScope,
+            configuredSeconds = { pingSettings.intervalSeconds },
+            beat = { gatewayService.getNewMessages(this@SSEForegroundService) },
         )
     }
 
@@ -104,6 +125,7 @@ class SSEForegroundService : Service() {
         startForeground(NotificationsService.NOTIFICATION_ID_REALTIME_EVENTS, notification)
 
         sseManager.connect()
+        heartbeat.start()
 
         return super.onStartCommand(intent, flags, startId)
     }
@@ -129,6 +151,8 @@ class SSEForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        heartbeat.stop()
+        heartbeatScope.cancel()
         sseManager.disconnect()
         if (wifiLock.isHeld) {
             wifiLock.release()

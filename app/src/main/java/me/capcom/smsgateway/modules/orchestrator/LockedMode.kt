@@ -46,10 +46,25 @@ object LockedMode : KoinComponent {
                 get<GatewayService>().startLocked()
                 get<WebHooksService>().startLocked()
                 registerUnlockReceiver(context.applicationContext)
+                logKeystoreProbe()
             }
             SSEForegroundService.start(context)
         } catch (e: Throwable) {
             Log.e(TAG, "can't start before the first unlock: ${e.javaClass.simpleName}")
+        }
+    }
+
+    /**
+     * Acceptance evidence for A5: logs once per locked start whether the Keystore opens
+     * and how many keys it lists. Never the alias, never key material. No key flag is changed.
+     */
+    private fun logKeystoreProbe() {
+        try {
+            val ks = java.security.KeyStore.getInstance("AndroidKeyStore")
+            ks.load(null)
+            Log.d(TAG, "keystore opened while locked, entries=${ks.size()}")
+        } catch (e: Throwable) {
+            Log.w(TAG, "keystore did not open while locked: ${e.javaClass.simpleName}")
         }
     }
 
