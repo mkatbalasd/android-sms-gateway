@@ -24,6 +24,8 @@ class SimSmsSender(context: Context) : LineSmsSender {
     private val appContext: Context = context.applicationContext
 
     override suspend fun send(slot: Int, to: String, text: String): Boolean {
+        // Last line of defence (the verifier already checked): no SEND_SMS, no radio call at all.
+        if (!AccountPermissions.canSendSms(appContext)) return false
         val manager = managerFor(slot) ?: return false
         val action = "${appContext.packageName}.LINE_PROOF_SENT.${UUID.randomUUID()}"
 

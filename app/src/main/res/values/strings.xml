@@ -284,6 +284,7 @@
     <string name="account_permissions_body">The app asks for three things: sending and receiving messages, reading the phone state, and notifications. They are used to send your business messages and to read the verification code that arrives by SMS.</string>
     <string name="account_permissions_allow">Allow</string>
     <string name="account_permissions_denied">Some permissions were not granted. Without them the phone cannot send messages.</string>
+    <string name="account_permissions_sms_granted_others_missing">The SMS permissions are granted. Other permissions are still off (phone state, notifications, MMS). You can continue, but the SIM list needs the phone state permission; open the app settings to allow them.</string>
     <string name="account_permissions_open_settings">Open app settings</string>
     <string name="account_permissions_continue">Continue anyway</string>
     <string name="account_create_title">Create an account for your business</string>
@@ -384,6 +385,7 @@
     <string name="numbers_status_verified_weak">Verified ✓ · self check (weaker)</string>
     <string name="numbers_status_send_failed">The check message was not sent. Make sure the SIM has credit.</string>
     <string name="numbers_status_timeout">Timed out. Try again.</string>
+    <string name="numbers_status_needs_permission">Allow the SMS sending permission, then check again. Nothing was sent.</string>
     <string name="numbers_status_open_proof">A check is already open. Try again in %1$d minutes.</string>
     <string name="numbers_status_needs_number">Type the number of this SIM, then check again. It will be checked by a message to itself (weaker).</string>
 

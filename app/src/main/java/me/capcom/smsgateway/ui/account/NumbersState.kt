@@ -32,6 +32,9 @@ enum class RowPhase {
 
     /** A check is open on the platform and this screen has no text to resend: retry in [NumberRow.retryMinutes]. */
     OPEN_PROOF,
+
+    /** SEND_SMS is not granted: nothing was asked of the platform and nothing was sent. */
+    NEEDS_PERMISSION,
     FAILED,
 }
 
@@ -96,6 +99,17 @@ object NumbersState {
     fun canContinue(rows: List<NumberRow>): Boolean =
         rows.none { it.busy } && rows.any { it.verified }
 
+    /**
+     * SEND_SMS is missing: the row says so, but a row the platform asked a number of
+     * (NEEDS_NUMBER) keeps its phase, field and typed number; only the permission request is shown.
+     */
+    fun permissionBlocked(row: NumberRow): NumberRow =
+        if (row.phase == RowPhase.NEEDS_NUMBER) row else row.copy(phase = RowPhase.NEEDS_PERMISSION)
+
+    /** The rows after a denied SEND_SMS: only ticked, unverified, idle rows change. */
+    fun markPermissionNeeded(rows: List<NumberRow>): List<NumberRow> =
+        rows.map { if (it.ticked && !it.verified && !it.busy) permissionBlocked(it) else it }
+
     fun update(rows: List<NumberRow>, slot: Int, change: (NumberRow) -> NumberRow): List<NumberRow> =
         rows.map { if (it.slot == slot) change(it) else it }
 }
@@ -125,6 +139,12 @@ class NumbersVerifier(
     private val pollIntervalMs: Long = POLL_INTERVAL_MS,
     private val timeoutMs: Long = TIMEOUT_MS,
     private val guard: ProofAttemptGuard = ProofAttemptGuard(MemoryAttemptLog(), nowMs),
+    /**
+     * True when SEND_SMS is granted right now. Asked before the platform is contacted and
+     * again immediately before the radio; the app passes the real runtime grant state.
+     * Required, with no default: a gate that fails open must be written out by the caller.
+     */
+    private val canSendSms: () -> Boolean,
 ) {
 
     /** Slots with a proof in progress: a second trigger on the same slot is a no-op. */
@@ -152,6 +172,8 @@ class NumbersVerifier(
     }
 
     private suspend fun verifyOnce(row: NumberRow, onPhase: (RowPhase) -> Unit): NumberRow {
+        // No SEND_SMS, no proof: do not even ask the platform to open one (it would burn an attempt).
+        if (!canSendSms()) return NumbersState.permissionBlocked(row)
         onPhase(RowPhase.STARTING)
 
         // The last tap's SMS did not leave and its token is still open: send that same text again.
@@ -192,6 +214,12 @@ class NumbersVerifier(
     }
 
     private suspend fun send(row: NumberRow, proof: Unsent, onPhase: (RowPhase) -> Unit): NumberRow {
+        // The permission may have been revoked since the start: check at the last moment. The
+        // started token is kept (not spent) so the next tap, once allowed, resends this one text.
+        if (!canSendSms()) {
+            unsent[row.slot] = proof
+            return NumbersState.permissionBlocked(row).let { if (it.phase == RowPhase.NEEDS_PERMISSION) it.copy(method = proof.method) else it }
+        }
         // One token, one SMS: record the attempt durably before the radio is asked.
         val key = ProofAttemptGuard.key(row.slot, proof.to, proof.text)
         if (!guard.tryBegin(key)) {

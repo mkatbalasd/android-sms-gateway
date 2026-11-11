@@ -35,6 +35,7 @@ internal class ProofAttemptGuardTest {
             delayMs = { clock.now += it },
             nowMs = { clock.now },
             guard = ProofAttemptGuard(log) { clock.now },
+            canSendSms = { true },
         )
 
     @Test
