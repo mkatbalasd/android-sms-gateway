@@ -8,7 +8,6 @@ import android.util.Log
 import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.helpers.SettingsHelper
 import me.capcom.smsgateway.modules.orchestrator.LockedMode
-import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -30,7 +29,9 @@ class BootReceiver : BroadcastReceiver(), KoinComponent {
 
         when (action) {
             BootPolicy.Action.IGNORE -> Unit
-            BootPolicy.Action.START_FULL -> get<OrchestratorService>().start(context, true)
+            // through the locked-mode gate: while the locked pipeline is still draining, the
+            // handover does the full start after it, so the two never send side by side
+            BootPolicy.Action.START_FULL -> LockedMode.requestFullStart(context)
             BootPolicy.Action.START_LOCKED -> LockedMode.start(context)
         }
     }
