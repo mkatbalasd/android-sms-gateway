@@ -27,7 +27,7 @@ class SimSmsSender(context: Context) : LineSmsSender {
         val manager = managerFor(slot) ?: return false
         val action = "${appContext.packageName}.LINE_PROOF_SENT.${UUID.randomUUID()}"
 
-        return withTimeoutOrNull(SENT_TIMEOUT_MS) {
+        val answered = withTimeoutOrNull(SENT_TIMEOUT_MS) {
             suspendCancellableCoroutine<Boolean> { continuation ->
                 val receiver = object : BroadcastReceiver() {
                     override fun onReceive(context: Context, intent: Intent) {
@@ -67,7 +67,9 @@ class SimSmsSender(context: Context) : LineSmsSender {
                     if (continuation.isActive) continuation.resume(false)
                 }
             }
-        } ?: false
+        }
+        // No sent-status in time: the system still holds the SMS and may send it later.
+        return answered ?: throw SendOutcomeUnknown()
     }
 
     /** The manager of the SIM in [slot] (1-based), by subscription; the default one only on API 21. */

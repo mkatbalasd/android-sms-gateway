@@ -34,6 +34,7 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
         sender = SimSmsSender(application),
         delayMs = { delay(it) },
         nowMs = { System.currentTimeMillis() },
+        guard = ProofAttemptGuard(PrefsAttemptLog(application)) { System.currentTimeMillis() },
     )
 
     /** Reads the SIM cards and what the platform already verified. Idempotent. */
