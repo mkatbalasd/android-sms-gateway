@@ -54,6 +54,21 @@ internal class FakeAppClient : AppClient {
         unlinkCalls.add(password)
         unlinkAnswer()
     }
+
+    /** V2-L23: what each pause or resume call does; the default is a 2xx. Calls go to [calls]. */
+    var pauseAnswer: () -> Unit = {}
+    var resumeAnswer: () -> Unit = {}
+    val calls = mutableListOf<String>()
+
+    override suspend fun pauseDevice() {
+        calls.add("pause")
+        pauseAnswer()
+    }
+
+    override suspend fun resumeDevice() {
+        calls.add("resume")
+        resumeAnswer()
+    }
 }
 
 internal fun line(

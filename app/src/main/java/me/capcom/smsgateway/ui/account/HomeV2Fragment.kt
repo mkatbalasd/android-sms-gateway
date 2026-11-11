@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -25,6 +26,10 @@ import me.capcom.smsgateway.modules.account.AccountSettings
 import me.capcom.smsgateway.modules.account.AppClient
 import me.capcom.smsgateway.modules.account.AppHome
 import me.capcom.smsgateway.modules.account.KeepAliveChecklist
+import me.capcom.smsgateway.modules.account.PAUSE_HOLD_MAX_MIN
+import me.capcom.smsgateway.modules.account.PauseController
+import me.capcom.smsgateway.modules.account.ServiceSwitch
+import me.capcom.smsgateway.modules.account.StaleSweep
 import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
@@ -32,8 +37,8 @@ import org.koin.android.ext.android.inject
 import java.io.IOException
 
 /**
- * The home screen of an app-enrolled phone (F1-8, 01-flows §1.1). View only:
- * nothing here changes the account. It polls `GET /v1/app/home` every minute
+ * The home screen of an app-enrolled phone (F1-8, 01-flows §1.1). Apart from the
+ * pause and resume of the phone (V2-L23) nothing here changes the account. It polls `GET /v1/app/home` every minute
  * while it is on screen and stops when it is not.
  */
 class HomeV2Fragment : Fragment() {
@@ -46,6 +51,21 @@ class HomeV2Fragment : Fragment() {
     private val settingsHelper: SettingsHelper by inject()
     private val gatewaySvc: GatewayService by inject()
     private val orchestratorSvc: OrchestratorService by inject()
+    private val staleSweep: StaleSweep by inject()
+
+    private val pauseController by lazy {
+        val appContext = requireContext().applicationContext
+        PauseController(
+            client, accountSettings,
+            object : ServiceSwitch {
+                // The same stop and start as the legacy home screen.
+                override fun start() = orchestratorSvc.start(appContext, false)
+                override fun stop() = orchestratorSvc.stop(appContext)
+            },
+            staleSweep,
+        )
+    }
+    private var pauseBusy = false
 
     private var home: AppHome? = null
     private var homeFailed = false
@@ -74,6 +94,9 @@ class HomeV2Fragment : Fragment() {
         binding.cardHomeKeepAlive.setOnClickListener { showKeepAliveGuide() }
         binding.buttonHomeStart.setOnClickListener {
             orchestratorSvc.start(requireContext().applicationContext, false)
+        }
+        binding.buttonHomePause.setOnClickListener {
+            if (isPausedNow()) resumeDevice() else confirmPause()
         }
 
         parentFragmentManager.setFragmentResultListener(
@@ -210,12 +233,16 @@ class HomeV2Fragment : Fragment() {
         if (data == null && !homeFailed) {
             b.textHomeStatus.setText(R.string.home_status_checking)
             b.buttonHomeStart.isVisible = false
+            b.buttonHomePause.isVisible = false
             return
         }
         val status = HomeStatus.phoneStatus(
-            localChecks(), HomeStatus.lastSeenMs(data), System.currentTimeMillis()
+            localChecks(), HomeStatus.lastSeenMs(data), System.currentTimeMillis(),
+            paused = isPausedNow()
         )
         b.textHomeStatus.text = when (status) {
+            PhoneStatus.Paused -> getString(R.string.home_status_paused)
+
             is PhoneStatus.Working ->
                 if (status.agoMinutes <= 0) getString(R.string.home_status_working_now)
                 else getString(R.string.home_status_working_ago, status.agoMinutes)
@@ -232,6 +259,13 @@ class HomeV2Fragment : Fragment() {
         }
         b.buttonHomeStart.isVisible =
             status is PhoneStatus.Stopped && status.reason == PhoneStatus.Reason.SERVICE
+        // «إيقاف مؤقت» only while the phone runs; «استئناف» only while it is paused.
+        b.buttonHomePause.isVisible =
+            status == PhoneStatus.Paused || status is PhoneStatus.Working || status == PhoneStatus.Offline
+        b.buttonHomePause.setText(
+            if (status == PhoneStatus.Paused) R.string.home_resume else R.string.home_pause
+        )
+        b.buttonHomePause.isEnabled = !pauseBusy
     }
 
     private fun renderKeepAlive(b: FragmentHomeV2Binding, data: AppHome?) {
@@ -272,6 +306,49 @@ class HomeV2Fragment : Fragment() {
     //endregion
 
     //region Actions
+
+    private fun isPausedNow(): Boolean = HomeStatus.isPaused(accountSettings.pausedAtMs, home)
+
+    private fun confirmPause() {
+        val ctx = context ?: return
+        if (pauseBusy) return
+        AlertDialog.Builder(ctx)
+            .setTitle(R.string.home_pause_confirm_title)
+            .setMessage(getString(R.string.home_pause_confirm_message, PAUSE_HOLD_MAX_MIN))
+            .setPositiveButton(R.string.home_pause_confirm_yes) { _, _ -> pauseDevice() }
+            .setNegativeButton(android.R.string.cancel, null)
+            .show()
+    }
+
+    /** The platform is told first; only a success stops the services. A failure leaves the phone running. */
+    private fun pauseDevice() = runPauseAction(R.string.home_pause_failed) {
+        pauseController.pause()
+        home = home?.copy(paused = true)
+    }
+
+    private fun resumeDevice() = runPauseAction(R.string.home_resume_failed) {
+        pauseController.resume()
+        home = home?.copy(paused = false, pausedAt = null)
+    }
+
+    private fun runPauseAction(failure: Int, action: suspend () -> Unit) {
+        if (pauseBusy) return
+        pauseBusy = true
+        showMessage(null)
+        render()
+        viewLifecycleOwner.lifecycleScope.launch {
+            try {
+                action()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                showMessage(getString(failure))
+            } finally {
+                pauseBusy = false
+                render()
+            }
+        }
+    }
 
     private fun showKeepAliveGuide() {
         if (!isAdded || parentFragmentManager.isStateSaved) return

@@ -392,6 +392,14 @@
     <string name="home_status_stopped_sim">Stopped · no SIM card found</string>
     <string name="home_status_offline">The phone is not connecting</string>
     <string name="home_start_service">Start</string>
+    <string name="home_status_paused">Paused</string>
+    <string name="home_pause">Pause</string>
+    <string name="home_resume">Resume</string>
+    <string name="home_pause_confirm_title">Pause this phone?</string>
+    <string name="home_pause_confirm_message">Messages that arrive while paused wait up to %1$d minutes, then they are cancelled and are not sent late, and their balance is returned.</string>
+    <string name="home_pause_confirm_yes">Pause</string>
+    <string name="home_pause_failed">Could not pause. Check the internet connection; the phone is still working.</string>
+    <string name="home_resume_failed">Could not resume. Check the internet connection and try again.</string>
     <string name="home_keep_alive_left">Keep the phone alive: %1$d steps left ›</string>
     <string name="home_keep_alive_waiting">Keep the phone alive: waiting for a full night of connection ›</string>
     <string name="home_numbers">Numbers</string>

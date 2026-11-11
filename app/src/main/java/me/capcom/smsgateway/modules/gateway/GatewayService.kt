@@ -263,6 +263,19 @@ class GatewayService(
                 th.printStackTrace()
             }
         }
+        // V2-L23: the first pull after a resume drops what waited more than the hold limit.
+        try {
+            staleSweep.onPullDone()
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    // Looked up lazily so this class keeps its constructor.
+    private val staleSweep by lazy {
+        org.koin.core.context.GlobalContext.get().get<me.capcom.smsgateway.modules.account.StaleSweep>()
     }
 
     private suspend fun processMessage(context: Context, message: GatewayApi.Message) {

@@ -57,6 +57,12 @@ interface AppBackend {
     suspend fun handoff(access: String): HandoffResponse
     suspend fun keepAlive(access: String, checklist: KeepAliveChecklist)
     suspend fun unlink(access: String, password: String)
+
+    /** POST /v1/app/device/pause (V2-L23): no body, the device comes from the app session; idempotent. */
+    suspend fun pauseDevice(access: String)
+
+    /** POST /v1/app/device/resume (V2-L23): no body; idempotent. */
+    suspend fun resumeDevice(access: String)
 }
 
 /**
@@ -162,6 +168,14 @@ class AccountApi(
 
     override suspend fun unlink(access: String, password: String) {
         send("/app/unlink", UnlinkRequest(password), access)
+    }
+
+    override suspend fun pauseDevice(access: String) {
+        send("/app/device/pause", null, access)
+    }
+
+    override suspend fun resumeDevice(access: String) {
+        send("/app/device/resume", null, access)
     }
 
     //endregion

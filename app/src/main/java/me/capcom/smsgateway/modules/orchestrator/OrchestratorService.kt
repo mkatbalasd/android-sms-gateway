@@ -3,6 +3,8 @@ package me.capcom.smsgateway.modules.orchestrator
 import android.content.Context
 import me.capcom.smsgateway.helpers.SettingsHelper
 import me.capcom.smsgateway.helpers.SubscriptionsHelper
+import me.capcom.smsgateway.modules.account.AccountSettings
+import me.capcom.smsgateway.modules.account.PauseHold
 import me.capcom.smsgateway.modules.device.DeviceService
 import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.incoming.IncomingMessagesService
@@ -27,9 +29,12 @@ class OrchestratorService(
     private val logsSvc: LogsService,
     private val deviceService: DeviceService,
     private val settings: SettingsHelper,
+    private val account: AccountSettings,
 ) {
     fun start(context: Context, autostart: Boolean) {
-        if (autostart && !settings.autostart) {
+        // Boot, app start and every keep-alive path come here with autostart = true;
+        // a phone the owner paused (V2-L23) stays stopped. A tap on «استئناف» is not an autostart.
+        if (autostart && !PauseHold.shouldAutostart(settings.autostart, account.pausedAtMs)) {
             return
         }
 

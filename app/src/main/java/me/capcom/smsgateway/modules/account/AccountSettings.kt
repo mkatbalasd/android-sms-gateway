@@ -16,7 +16,7 @@ import java.security.SecureRandom
 /** What complete needs after a crash: the gateway device id and the nonce of the enrolment. */
 data class PendingCompletion(val gatewayDeviceId: String, val nonce: String)
 
-class AccountSettings(private val storage: KeyValueStorage) {
+class AccountSettings(private val storage: KeyValueStorage) : PauseStore {
 
     /** One JSON document under one key: strings with spaces survive the round trip. */
     data class Stored(
@@ -31,6 +31,8 @@ class AccountSettings(private val storage: KeyValueStorage) {
         val linked: Boolean? = null,
         val pending: PendingVerification? = null,
         val pendingCompletion: PendingCompletion? = null,
+        val pausedAtMs: Long? = null,
+        val sweepAfterResume: Boolean? = null,
     ) {
         override fun toString() = "Stored(redacted)"
     }
@@ -100,6 +102,16 @@ class AccountSettings(private val storage: KeyValueStorage) {
     var pendingCompletion: PendingCompletion?
         get() = read().pendingCompletion
         set(value) = update { it.copy(pendingCompletion = value) }
+
+    /** V2-L23: when the owner paused this phone; null when it runs. Cleared with the account by [reset]. */
+    override var pausedAtMs: Long?
+        get() = read().pausedAtMs
+        set(value) = update { it.copy(pausedAtMs = value) }
+
+    /** V2-L23: the next pull after a resume still drops the messages that waited too long. */
+    override var sweepAfterResume: Boolean
+        get() = read().sweepAfterResume == true
+        set(value) = update { it.copy(sweepAfterResume = if (value) true else null) }
 
     /** One write: linked, and nothing left to complete. */
     fun markLinked() = update { it.copy(linked = true, pendingCompletion = null) }

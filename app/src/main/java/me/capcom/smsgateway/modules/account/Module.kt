@@ -23,6 +23,8 @@ val accountModule = module {
         )
     }
     single<AppClient> { AppRepository(get<AppBackend>(), get<AccountRepository>()) }
+    // V2-L23: pause and resume of the phone, and the sweep of messages that waited too long.
+    single { StaleSweep(get<PendingStore>(), get<AccountSettings>()) }
     factory<LocalCleanup> {
         AndroidLocalCleanup(
             get<Context>(),

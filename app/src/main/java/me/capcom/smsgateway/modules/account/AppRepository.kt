@@ -16,6 +16,12 @@ interface AppClient {
     suspend fun handoffUrl(): String
     suspend fun keepAlive(checklist: KeepAliveChecklist)
     suspend fun unlink(password: String)
+
+    /** V2-L23: tells the platform this phone is paused; the caller stops the services only after it returns. */
+    suspend fun pauseDevice()
+
+    /** V2-L23: tells the platform this phone is back. */
+    suspend fun resumeDevice()
 }
 
 /** [AppClient] over [AppBackend], with the session refresh of [AccountRepository] around every call. */
@@ -61,6 +67,14 @@ class AppRepository(
 
     override suspend fun unlink(password: String) {
         account.withSession { api.unlink(it, password) }
+    }
+
+    override suspend fun pauseDevice() {
+        account.withSession { api.pauseDevice(it) }
+    }
+
+    override suspend fun resumeDevice() {
+        account.withSession { api.resumeDevice(it) }
     }
 
     private companion object {

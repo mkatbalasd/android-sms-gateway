@@ -1,5 +1,6 @@
 package me.capcom.smsgateway.modules.messages
 
+import me.capcom.smsgateway.modules.account.PendingStore
 import me.capcom.smsgateway.modules.messages.vm.MessageDetailsViewModel
 import me.capcom.smsgateway.modules.messages.vm.MessagesListViewModel
 import org.koin.androidx.viewmodel.dsl.viewModel
@@ -10,6 +11,7 @@ val messagesModule = module {
     singleOf(::MessagesRepository)
     singleOf(::MessagesService)
     singleOf(::MessageStateService)
+    single<PendingStore> { RoomPendingStore(get(), get()) }
     viewModel { MessagesListViewModel(get()) }
     viewModel { MessageDetailsViewModel(get()) }
 }

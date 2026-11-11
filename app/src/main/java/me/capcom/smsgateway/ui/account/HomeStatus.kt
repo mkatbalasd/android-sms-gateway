@@ -4,6 +4,7 @@ import me.capcom.smsgateway.helpers.KeepAliveGuideState
 import me.capcom.smsgateway.modules.account.AppHome
 import me.capcom.smsgateway.modules.account.HomeDevice
 import me.capcom.smsgateway.modules.account.IsoTime
+import me.capcom.smsgateway.modules.account.PauseHold
 import java.math.BigDecimal
 import java.math.RoundingMode
 
@@ -27,6 +28,9 @@ sealed class PhoneStatus {
     /** «الهاتف لا يتصل»: the phone looks fine but the server has not seen it lately. */
     object Offline : PhoneStatus()
 
+    /** «متوقف مؤقتًا»: the owner paused the phone (V2-L23); not an error and not offline. */
+    object Paused : PhoneStatus()
+
     enum class Reason { SERVICE, PERMISSION, SIM }
 }
 
@@ -37,7 +41,17 @@ object HomeStatus {
     /** The server's liveness poller is the truth: older than this is "not connecting". */
     const val FRESH_MS = 15 * 60_000L
 
-    fun phoneStatus(local: LocalChecks, lastSeenAtMs: Long?, nowMs: Long): PhoneStatus {
+    /**
+     * [paused] (the local flag or the platform's `paused`, see [PauseHold.isPaused]) wins over
+     * everything else: a paused phone has its services stopped on purpose.
+     */
+    fun phoneStatus(
+        local: LocalChecks,
+        lastSeenAtMs: Long?,
+        nowMs: Long,
+        paused: Boolean = false,
+    ): PhoneStatus {
+        if (paused) return PhoneStatus.Paused
         when {
             !local.smsPermissionGranted -> return PhoneStatus.Stopped(PhoneStatus.Reason.PERMISSION)
             !local.serviceRunning -> return PhoneStatus.Stopped(PhoneStatus.Reason.SERVICE)
@@ -52,6 +66,10 @@ object HomeStatus {
             batteryNote = local.batteryExempt == false,
         )
     }
+
+    /** Paused when the phone remembers the pause or the platform's home says so. */
+    fun isPaused(pausedAtMs: Long?, home: AppHome?): Boolean =
+        PauseHold.isPaused(pausedAtMs, home?.paused)
 
     /** The phone this screen speaks for: the active one the server saw last. */
     fun lastSeenMs(home: AppHome?): Long? =
