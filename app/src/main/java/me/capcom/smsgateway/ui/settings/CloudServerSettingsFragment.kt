@@ -27,6 +27,7 @@ class CloudServerSettingsFragment : BasePreferenceFragment() {
 
     @SuppressLint("NotifyDataSetChanged")
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.setStorageDeviceProtected() // CARD-21: same file as the settings classes
         setPreferencesFromResource(R.xml.cloud_server_preferences, rootKey)
 
         findPreference<Preference>("transient.device_id")?.summary =

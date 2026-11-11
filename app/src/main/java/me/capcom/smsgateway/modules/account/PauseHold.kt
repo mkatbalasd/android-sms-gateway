@@ -62,7 +62,7 @@ object PauseHold {
         serverPaused == true && !store.isPaused && (store.resumedAtMs ?: 0L) < requestedAtMs
 }
 
-/** What the phone remembers about the last pause; [AccountSettings] is the production store. */
+/** What the phone remembers about the last pause; [DevicePauseStore] is the production store. */
 interface PauseStore {
     /** Start of the last pause (local clock). Kept after the resume: the drop rule needs it. */
     var pausedAtMs: Long?
@@ -77,15 +77,18 @@ interface PauseStore {
 }
 
 /**
- * Reads the pause from every service that could start or pull. Fails open: a store that
- * cannot be read is "not paused", so a storage fault never silences a phone for good.
+ * Reads the pause from every service that could start, pull or send, locked or unlocked.
+ * Fails CLOSED (CARD-21 round 7): a pause state that cannot be read (no store yet, a
+ * storage fault, the first unlock not reached with nothing copied) counts as "paused", so
+ * the phone never sends on a state it could not read. The source is the device-protected
+ * [DevicePauseStore], readable before the first unlock.
  */
 object PauseGate {
     internal val defaultProvider: () -> Boolean = {
         try {
-            GlobalContext.getOrNull()?.get<AccountSettings>()?.isPaused == true
+            GlobalContext.getOrNull()?.get<PauseStore>()?.isPaused ?: true
         } catch (e: Exception) {
-            false
+            true
         }
     }
 

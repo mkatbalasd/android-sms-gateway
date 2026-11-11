@@ -15,7 +15,6 @@ import me.capcom.smsgateway.modules.gateway.inbox.InboxUploadService
 import me.capcom.smsgateway.modules.gateway.inbox.InboxUploadWorker
 import me.capcom.smsgateway.modules.gateway.services.SSEForegroundService
 import me.capcom.smsgateway.modules.gateway.workers.PullMessagesWorker
-import me.capcom.smsgateway.modules.gateway.workers.SendStateWorker
 import me.capcom.smsgateway.modules.gateway.workers.SettingsUpdateWorker
 import me.capcom.smsgateway.modules.gateway.workers.WebhooksUpdateWorker
 import me.capcom.smsgateway.modules.localserver.domain.SimCard
@@ -36,6 +35,7 @@ class GatewayService(
     private val events: EventBus,
     private val logsService: LogsService,
     private val deviceService: DeviceService,
+    private val scheduler: WorkScheduler,
 ) {
     private val eventsReceiver by lazy { EventsReceiver() }
 
@@ -56,6 +56,13 @@ class GatewayService(
         WebhooksUpdateWorker.start(context)
         SettingsUpdateWorker.start(context)
         InboxUploadWorker.start(context)
+
+        eventsReceiver.start()
+    }
+
+    /** CARD-21: before the first unlock only the events collector runs; no WorkManager. */
+    fun startLocked() {
+        if (!settings.enabled) return
 
         eventsReceiver.start()
     }
@@ -262,27 +269,17 @@ class GatewayService(
         }
         val messages = api.getMessages(settings.token, processingOrder)
         this.settings.recordContact()
-        for (message in messages) {
-            try {
-                processMessage(context, message)
-            } catch (th: Throwable) {
-                logsService.insert(
-                    LogEntry.Priority.ERROR,
-                    MODULE_NAME,
-                    "Failed to process message",
-                    mapOf(
-                        "message" to message,
-                        "exception" to th.stackTraceToString(),
-                    )
-                )
-                th.printStackTrace()
-            }
-        }
+        processPulled(
+            messages,
+            process = { processMessage(context, it) },
+            log = { text, data -> logsService.insert(LogEntry.Priority.ERROR, MODULE_NAME, text, data) },
+        )
     }
 
-    // V2-L23. Looked up lazily so this class keeps its constructor.
+    // V2-L23, CARD-21 round 7: the device-protected store, readable before the first unlock.
+    // Looked up lazily so this class keeps its constructor.
     private val pauseStore: me.capcom.smsgateway.modules.account.PauseStore by lazy {
-        org.koin.core.context.GlobalContext.get().get<me.capcom.smsgateway.modules.account.AccountSettings>()
+        org.koin.core.context.GlobalContext.get().get<me.capcom.smsgateway.modules.account.PauseStore>()
     }
 
     private suspend fun processMessage(context: Context, message: GatewayApi.Message) {
@@ -302,7 +299,7 @@ class GatewayService(
 
         val messageState = messagesService.getMessage(message.id)
         if (messageState != null) {
-            SendStateWorker.start(context, message.id)
+            scheduler.sendState(message.id)
             return
         }
 
@@ -470,9 +467,39 @@ internal suspend fun handleCloudCancel(
 }
 
 /**
- * V2-L23: the only way a pulled message reaches the send queue. The drop rule runs first;
- * [enqueue] is called only for a message that was not held too long, so a stale message
- * is never enqueued.
+ * CARD-21 round 7: runs [process] for every pulled message; one failure never stops the
+ * others. A failure is logged with the message id and the error class ONLY: never the
+ * message (recipient numbers, text) and never an exception message or stack trace, which
+ * can carry them. The log row is a visible, long-lived copy.
+ */
+internal suspend fun processPulled(
+    messages: List<GatewayApi.Message>,
+    process: suspend (GatewayApi.Message) -> Unit,
+    log: (text: String, data: Map<String, String>) -> Unit,
+) {
+    for (message in messages) {
+        try {
+            process(message)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (th: Throwable) {
+            log(
+                "Failed to process message",
+                mapOf("messageId" to message.id, "exception" to th.javaClass.name),
+            )
+        }
+    }
+}
+
+/**
+ * V2-L23: the only way a pulled message reaches the send queue. Order:
+ *
+ * 1. CARD-21 round 7: a paused phone enqueues nothing, locked or unlocked. A pause state
+ *    that cannot be read counts as paused (fail closed): [PauseStore.isPaused] throwing
+ *    is NOT caught as "not paused". The message is left alone (it stays Pending on the
+ *    platform, as when the pull itself is refused while paused).
+ * 2. the drop rule: a message held too long by the last pause is failed, not enqueued;
+ * 3. [enqueue], only for a message that passed both.
  */
 internal suspend fun enqueueUnlessHeld(
     message: GatewayApi.Message,
@@ -481,6 +508,12 @@ internal suspend fun enqueueUnlessHeld(
     sendFailed: suspend (GatewayApi.MessagePatchRequest) -> Unit,
     enqueue: suspend () -> Unit,
 ) {
+    val paused = try {
+        store.isPaused
+    } catch (e: Exception) {
+        true
+    }
+    if (paused) return
     if (handlePauseHold(message, store, nowMs, sendFailed)) return
     enqueue()
 }

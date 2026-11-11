@@ -37,6 +37,7 @@
         android:theme="@style/Theme.SmsGateway">
         <service
             android:name=".modules.gateway.services.SSEForegroundService"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="dataSync" />
@@ -81,6 +82,7 @@
 
         <receiver
             android:name=".receivers.EventsReceiver"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
@@ -91,11 +93,14 @@
         </receiver>
         <receiver
             android:name=".receivers.BootReceiver"
+            android:directBootAware="true"
             android:enabled="true"
             android:exported="true">
             <intent-filter>
                 <category android:name="android.intent.category.DEFAULT" />
 
+                <!-- CARD-21: before the first unlock (Direct Boot). -->
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
                 <action android:name="android.intent.action.ACTION_BOOT_COMPLETED" />
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
@@ -105,6 +110,12 @@
                 <action android:name="android.intent.action.ACTION_SHUTDOWN" />
             </intent-filter>
         </receiver>
+
+        <!-- CARD-21: our own relaunch alarm only (explicit PendingIntent); not exported. -->
+        <receiver
+            android:name=".receivers.RelaunchReceiver"
+            android:enabled="true"
+            android:exported="false" />
 
         <service
             android:name=".modules.localserver.WebService"

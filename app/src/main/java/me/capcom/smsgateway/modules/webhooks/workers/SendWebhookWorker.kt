@@ -30,6 +30,8 @@ import kotlinx.coroutines.runBlocking
 import me.capcom.smsgateway.BuildConfig
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.extensions.configure
+import me.capcom.smsgateway.helpers.DeviceStorage
+import me.capcom.smsgateway.modules.gateway.WorkScheduler
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.notifications.NotificationsService
@@ -241,12 +243,20 @@ class SendWebhookWorker(appContext: Context, params: WorkerParameters) :
                 )
 
                 // Start the queue processor worker to handle the enqueued webhook
-                WebhookQueueProcessorWorker.start(
-                    context = context,
-                    internetRequired = internetRequired
-                )
+                get<WorkScheduler>().processWebhookQueue(internetRequired)
 
             } catch (e: Exception) {
+                // CARD-21: before the first unlock there is no WorkManager; the row (if it
+                // was written) stays in the queue and is sent by the in-process runner.
+                if (!DeviceStorage.isUnlocked(context)) {
+                    logsService.insert(
+                        priority = LogEntry.Priority.WARN,
+                        module = NAME,
+                        message = "Webhook enqueue failed while locked: ${e.javaClass.simpleName}",
+                    )
+                    return
+                }
+
                 // Fallback to direct processing if queue enqueue fails
                 logsService.insert(
                     priority = LogEntry.Priority.WARN,

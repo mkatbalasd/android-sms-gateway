@@ -9,6 +9,7 @@ import me.capcom.smsgateway.R
 class WebhooksSettingsFragment : BasePreferenceFragment() {
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.setStorageDeviceProtected() // CARD-21
         setPreferencesFromResource(R.xml.webhooks_preferences, rootKey)
 
         // The signing key must never be rendered in the list: masked summary only.

@@ -5,6 +5,28 @@ import me.capcom.smsgateway.modules.settings.Importer
 import me.capcom.smsgateway.modules.settings.KeyValueStorage
 import me.capcom.smsgateway.modules.settings.get
 
+/**
+ * CARD-21: the gateway password, in memory only. [GatewaySettings] is created per injection
+ * (a Koin factory), so the value lives here, once per process, and is never written anywhere.
+ */
+internal object SessionPassword {
+    @Volatile
+    private var password: String? = null
+
+    fun remember(info: GatewayApi.DeviceRegisterResponse?) {
+        password = info?.password
+    }
+
+    fun merge(stored: GatewayApi.DeviceRegisterResponse?): GatewayApi.DeviceRegisterResponse? {
+        val kept = password ?: return stored
+        return stored?.copy(password = kept)
+    }
+
+    fun forget() {
+        password = null
+    }
+}
+
 class GatewaySettings(
     private val storage: KeyValueStorage,
 ) : Exporter, Importer {
@@ -20,9 +42,19 @@ class GatewaySettings(
     val deviceId: String?
         get() = registrationInfo?.id
 
+    /**
+     * CARD-21: the gateway password is never stored (it would sit in device-protected
+     * storage). It is kept in memory only, for the rest of this process, so the screens that
+     * were given it at registration or at a password change still work in this session
+     * ("Set (hidden)", login code without a prompt). After a restart it is gone and the
+     * screens ask for it, as they do for an account whose password was never shown.
+     */
     var registrationInfo: GatewayApi.DeviceRegisterResponse?
-        get() = storage.get(REGISTRATION_INFO)
-        set(value) = storage.set(REGISTRATION_INFO, value)
+        get() = SessionPassword.merge(storage.get<GatewayApi.DeviceRegisterResponse>(REGISTRATION_INFO))
+        set(value) {
+            SessionPassword.remember(value)
+            storage.set(REGISTRATION_INFO, value?.copy(password = null))
+        }
 
     /**
      * When the gateway last got a good answer from the server (a pull, a device update, a

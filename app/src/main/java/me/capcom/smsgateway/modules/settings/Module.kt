@@ -1,6 +1,7 @@
 package me.capcom.smsgateway.modules.settings
 
 import androidx.preference.PreferenceManager
+import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.helpers.SettingsHelper
 import me.capcom.smsgateway.modules.device.DeviceSettings
 import me.capcom.smsgateway.modules.encryption.EncryptionSettings
@@ -20,7 +21,8 @@ import org.koin.dsl.module
 
 val settingsModule = module {
     singleOf(::SettingsService)
-    factory { PreferenceManager.getDefaultSharedPreferences(get()) }
+    // CARD-21: the default preferences live in device-protected storage.
+    factory { PreferenceManager.getDefaultSharedPreferences(DeviceStorage.deContext(get())) }
     factory { SettingsHelper(get()) }
 
     factory {

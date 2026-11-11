@@ -1,16 +1,25 @@
 package me.capcom.smsgateway.modules.webhooks
 
 import android.content.Context
+import me.capcom.smsgateway.helpers.DeviceStorage
 import java.io.File
 
+/**
+ * Webhook payload files. CARD-21: they live in device-protected storage so the
+ * queue can be written and read before the first unlock; files written by an
+ * earlier version stay readable from the credential-encrypted directory.
+ */
 class WebhookPayloadStorage(
-    context: Context,
+    private val context: Context,
 ) {
-    private val payloadDir = File(context.filesDir, PAYLOAD_DIR_NAME).apply {
+    private val payloadDir = File(DeviceStorage.deContext(context).filesDir, PAYLOAD_DIR_NAME).apply {
         if (!exists()) {
             mkdirs()
         }
     }
+
+    // Touched only when a file is not in the device-protected directory (old queue rows).
+    private val legacyDir by lazy { File(context.filesDir, PAYLOAD_DIR_NAME) }
 
     fun save(key: String, payload: String): String {
         val file = File(payloadDir, key)
@@ -26,11 +35,15 @@ class WebhookPayloadStorage(
 
         val key = payloadRefOrInlinePayload.removePrefix(FILE_REF_PREFIX)
         val file = File(payloadDir, key)
-        if (!file.exists()) {
-            return null
+        if (file.exists()) {
+            return file.readText()
         }
 
-        return file.readText()
+        return try {
+            File(legacyDir, key).takeIf { it.exists() }?.readText()
+        } catch (e: Exception) {
+            null
+        }
     }
 
     fun delete(key: String) {
@@ -38,10 +51,36 @@ class WebhookPayloadStorage(
         if (file.exists()) {
             file.delete()
         }
+
+        try {
+            val legacy = File(legacyDir, key)
+            if (legacy.exists()) {
+                legacy.delete()
+            }
+        } catch (e: Exception) {
+            // credential-encrypted storage is not available yet; nothing to remove
+        }
+    }
+
+    /** Unlink: every payload file of the old link, in the device-protected and the legacy directory. */
+    fun clearAll() {
+        deleteAllIn(payloadDir)
+        try {
+            deleteAllIn(legacyDir)
+        } catch (e: Exception) {
+            // credential-encrypted storage is not available; nothing legacy can be read either
+        }
     }
 
     companion object {
         private const val PAYLOAD_DIR_NAME = "webhook_payloads"
         private const val FILE_REF_PREFIX = "file:"
+
+        /** Deletes the files inside each directory (the directories stay; missing ones are skipped). */
+        fun deleteAllIn(vararg dirs: File) {
+            for (dir in dirs) {
+                dir.listFiles()?.forEach { it.delete() }
+            }
+        }
     }
 }

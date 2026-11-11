@@ -24,7 +24,9 @@ import me.capcom.smsgateway.data.entities.MessageWithRecipients
 import me.capcom.smsgateway.domain.EntitySource
 import me.capcom.smsgateway.domain.MessageContent
 import me.capcom.smsgateway.domain.ProcessingState
+import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.helpers.PhoneHelper
+import me.capcom.smsgateway.modules.gateway.WorkScheduler
 import me.capcom.smsgateway.helpers.SubscriptionsHelper
 import me.capcom.smsgateway.modules.encryption.EncryptionService
 import me.capcom.smsgateway.modules.health.domain.CheckResult
@@ -52,6 +54,7 @@ class MessagesService(
     private val machine: MessageStateService,
     private val logsService: LogsService,
     private val mmsSender: MmsSender,
+    private val scheduler: WorkScheduler,
 ) {
     /**
      * Serializes the worker (KEEP/REPLACE) decisions made from the DB snapshot
@@ -59,6 +62,9 @@ class MessagesService(
      * cannot install a delayed work between the snapshot read and the start call.
      */
     private val sendWorkerLock = Any()
+
+    /** MessagesService is a Koin single, so this is the process-wide gate. */
+    private val sendGate = SendGate()
     val processingOrder
         get() = settings.processingOrder
 
@@ -136,13 +142,12 @@ class MessagesService(
             }
 
             if (startTime == SendMessagesWorker.IMMEDIATE) {
-                SendMessagesWorker.start(
-                    context,
+                scheduler.sendMessages(
                     nextScheduled != null || priority >= Message.PRIORITY_EXPEDITED,
                     SendMessagesWorker.IMMEDIATE
                 )
             } else {
-                SendMessagesWorker.start(context, true, startTime)
+                scheduler.sendMessages(true, startTime)
             }
 
             return message
@@ -279,12 +284,30 @@ class MessagesService(
         dao.truncateLog(System.currentTimeMillis() - lifetime * 86400000L)
     }
 
-    internal suspend fun sendPendingMessages() {
+    /**
+     * CARD-21: one send loop at a time. At the unlock handover the in-process loop and the
+     * WorkManager worker can both be alive; the state moves to Processed only after the
+     * send, so without this gate both would send the same message. The second loop waits
+     * here, then finds nothing pending (the per-message lock only orders state changes).
+     */
+    internal suspend fun sendPendingMessages() = sendGate.exclusive { drainPendingMessages() }
+
+    private suspend fun drainPendingMessages() {
         try {
             var previousPriority = Message.PRIORITY_MIN
 
             while (true) {
+                // CARD-21 round 7: a pause (or an unreadable pause state) that starts while
+                // the loop runs stops it before the next message; it resumes with the resume.
+                if (me.capcom.smsgateway.modules.account.PauseGate.isPaused()) return
                 val message = messages.getPending(settings.processingOrder) ?: return
+                // CARD-21: an MMS needs credential-encrypted files; it waits for the unlock
+                // (the run stops here, the full start after the unlock sends it).
+                if (message.message.content is MessageContent.Mms
+                    && !DeviceStorage.isUnlocked(context)
+                ) {
+                    return
+                }
                 delay(1L)
 
                 val priority = message.params.priority ?: Message.PRIORITY_DEFAULT
@@ -326,7 +349,7 @@ class MessagesService(
                     // After processing all pending messages, check if there are any scheduled messages for the future
                     val nextScheduledTime = dao.nextScheduledTime() ?: 0
                     if (nextScheduledTime > System.currentTimeMillis()) {
-                        SendMessagesWorker.start(context, true, nextScheduledTime)
+                        scheduler.sendMessages(true, nextScheduledTime)
                     }
                 }
             }
@@ -367,7 +390,7 @@ class MessagesService(
                     )
                     false
                 } else {
-                    SendMessagesWorker.start(context, true, nextStart)
+                    scheduler.sendMessages(true, nextStart)
                     true
                 }
             }

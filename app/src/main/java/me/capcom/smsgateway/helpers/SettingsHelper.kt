@@ -9,7 +9,7 @@ import me.capcom.smsgateway.receivers.BootReceiver
 import java.util.Locale
 
 class SettingsHelper(private val context: Context) {
-    private val settings = PreferenceManager.getDefaultSharedPreferences(context)
+    private val settings = PreferenceManager.getDefaultSharedPreferences(DeviceStorage.deContext(context))
 
     init {
         migrate()

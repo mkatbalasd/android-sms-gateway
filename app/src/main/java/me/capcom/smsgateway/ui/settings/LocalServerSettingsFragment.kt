@@ -12,6 +12,7 @@ class LocalServerSettingsFragment : BasePreferenceFragment() {
     private val settings by inject<LocalServerSettings>()
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.setStorageDeviceProtected() // CARD-21
         setPreferencesFromResource(R.xml.local_server_preferences, rootKey)
 
         findPreference<Preference>("transient.device_id")?.summary =
