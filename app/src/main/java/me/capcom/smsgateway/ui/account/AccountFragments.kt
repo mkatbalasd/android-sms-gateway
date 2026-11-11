@@ -13,7 +13,6 @@ import android.view.ViewGroup
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.text.BidiFormatter
 import androidx.core.view.isVisible
-import androidx.core.widget.doAfterTextChanged
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
@@ -28,9 +27,9 @@ import me.capcom.smsgateway.databinding.FragmentAccountLinkingBinding
 import me.capcom.smsgateway.databinding.FragmentAccountPermissionsBinding
 import me.capcom.smsgateway.databinding.FragmentAccountSigninBinding
 import me.capcom.smsgateway.databinding.FragmentAccountWelcomeBinding
-import me.capcom.smsgateway.helpers.SubscriptionsHelper
 import me.capcom.smsgateway.modules.account.EnrolmentState
 import me.capcom.smsgateway.modules.account.IsoTime
+import me.capcom.smsgateway.modules.account.IntlPhone
 import me.capcom.smsgateway.modules.account.MobileInput
 import me.capcom.smsgateway.modules.account.OtpDigits
 import me.capcom.smsgateway.modules.account.OtpSmsReader
@@ -183,16 +182,10 @@ class CreateAccountFragment : Fragment() {
         binding.textTerms.movementMethod = LinkMovementMethod.getInstance()
         binding.textTerms.text = getText(R.string.account_terms_checkbox)
 
-        if (savedInstanceState == null) {
-            val prefilled = prefilledNumber(ctx)
-            binding.editMobile.setText(prefilled)
-            if (prefilled.isEmpty()) {
-                binding.layoutMobile.helperText = getString(R.string.account_mobile_empty_hint)
-            }
-        }
-        binding.editMobile.doAfterTextChanged {
-            if (!it.isNullOrEmpty()) binding.layoutMobile.helperText = null
-        }
+        // Only the country is preselected (the SIM, else the network, else the locale); the
+        // number is never prefilled (not from the SIM, never an IMSI): the customer types it.
+        // After a rotation the field restores its own country and number.
+        if (savedInstanceState == null) binding.phoneMobile.preselectDefault()
 
         binding.buttonCreateSubmit.setOnClickListener { submit(viewModel) }
         binding.buttonCreateBack.setOnClickListener { viewModel.back() }
@@ -209,26 +202,15 @@ class CreateAccountFragment : Fragment() {
         }
     }
 
-    // The SIM's own number when the carrier provisioned it and the permission allows; never required.
-    private fun prefilledNumber(ctx: Context): String = try {
-        SubscriptionsHelper.getPhoneNumber(ctx, 0).orEmpty()
-    } catch (e: Exception) {
-        ""
-    }
-
     private fun submit(viewModel: AccountViewModel) {
-        val ctx = requireContext()
         binding.layoutBusinessName.error = null
-        binding.layoutMobile.error = null
+        binding.phoneMobile.setError(null)
         binding.layoutPassword.error = null
         binding.textTermsError.isVisible = false
         binding.textCreateError.isVisible = false
 
         val name = binding.editBusinessName.text?.toString().orEmpty().trim()
-        val mobile = MobileInput.normalize(
-            binding.editMobile.text?.toString().orEmpty(),
-            simCountryCode(ctx)
-        )
+        val mobile = (binding.phoneMobile.result() as? IntlPhone.Result.Valid)?.e164
         val password = binding.editPassword.text?.toString().orEmpty()
 
         var valid = true
@@ -237,7 +219,7 @@ class CreateAccountFragment : Fragment() {
             valid = false
         }
         if (mobile == null) {
-            binding.layoutMobile.error = getString(R.string.account_error_mobile)
+            binding.phoneMobile.setError(getString(R.string.intl_phone_error))
             valid = false
         }
         if (password.length < MIN_PASSWORD) {
@@ -284,7 +266,10 @@ class SignInFragment : Fragment() {
         val ctx = requireContext()
 
         binding.buttonSignInSubmit.setOnClickListener { submit(viewModel) }
-        binding.buttonSignInBack.setOnClickListener { viewModel.back() }
+        binding.buttonSignInBack.setOnClickListener {
+            // A linked phone signing in again has no welcome screen: back closes the screen.
+            if (!viewModel.back()) requireActivity().finish()
+        }
 
         viewModel.busy.observe(viewLifecycleOwner) { busy ->
             binding.buttonSignInSubmit.isEnabled = !busy

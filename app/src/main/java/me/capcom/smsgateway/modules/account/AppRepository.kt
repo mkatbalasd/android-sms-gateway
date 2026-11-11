@@ -16,6 +16,18 @@ interface AppClient {
     suspend fun handoffUrl(): String
     suspend fun keepAlive(checklist: KeepAliveChecklist)
     suspend fun unlink(password: String)
+
+    /** V2-L23: tells the platform this phone is paused; the caller stops the services only after it returns. */
+    suspend fun pauseDevice()
+
+    /** V2-L23: tells the platform this phone is back. */
+    suspend fun resumeDevice()
+
+    /** Step 1 of the re-attach: a nonce encrypted to this phone's E2E key. */
+    suspend fun reattachChallenge(externalDeviceId: String): ReattachChallenge
+
+    /** Step 2: the decrypted nonce; the platform ties the new app session to the phone. */
+    suspend fun reattach(challengeId: String, nonce: String): ReattachResult
 }
 
 /** [AppClient] over [AppBackend], with the session refresh of [AccountRepository] around every call. */
@@ -62,6 +74,20 @@ class AppRepository(
     override suspend fun unlink(password: String) {
         account.withSession { api.unlink(it, password) }
     }
+
+    override suspend fun pauseDevice() {
+        account.withSession { api.pauseDevice(it) }
+    }
+
+    override suspend fun resumeDevice() {
+        account.withSession { api.resumeDevice(it) }
+    }
+
+    override suspend fun reattachChallenge(externalDeviceId: String): ReattachChallenge =
+        account.withSession { api.reattachChallenge(it, ReattachChallengeRequest(externalDeviceId)) }
+
+    override suspend fun reattach(challengeId: String, nonce: String): ReattachResult =
+        account.withSession { api.reattach(it, ReattachRequest(challengeId, nonce)) }
 
     private companion object {
         const val HANDOFF_URL_BASE = "https://app.mnaseb.com/handoff#t="

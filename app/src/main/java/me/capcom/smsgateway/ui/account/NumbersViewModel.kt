@@ -34,6 +34,7 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
         sender = SimSmsSender(application),
         delayMs = { delay(it) },
         nowMs = { System.currentTimeMillis() },
+        guard = ProofAttemptGuard(PrefsAttemptLog(application)) { System.currentTimeMillis() },
     )
 
     /** Reads the SIM cards and what the platform already verified. Idempotent. */
@@ -42,7 +43,7 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
         started = true
         viewModelScope.launch {
             val sims = SubscriptionsHelper.getActiveSimCards(getApplication<Application>()).map {
-                SimSlot(it.simNumber, it.carrierName, it.phoneNumber)
+                SimSlot(it.simNumber, it.carrierName, it.phoneNumber, it.countryIso)
             }
             val lines = try {
                 client.lines()

@@ -18,21 +18,13 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="32dp" />
 
-    <com.google.android.material.textfield.TextInputLayout
-        android:id="@+id/layoutSlotNumber"
+    <me.capcom.smsgateway.ui.account.IntlPhoneView
+        android:id="@+id/phoneSlotNumber"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginStart="32dp"
-        android:hint="@string/numbers_type_number"
-        android:visibility="gone">
-
-        <com.google.android.material.textfield.TextInputEditText
-            android:id="@+id/editSlotNumber"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:imeOptions="actionDone"
-            android:inputType="phone" />
-    </com.google.android.material.textfield.TextInputLayout>
+        android:saveEnabled="false"
+        android:visibility="gone" />
 
     <TextView
         android:id="@+id/textSlotStatus"

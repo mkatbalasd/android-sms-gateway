@@ -11,6 +11,7 @@ import androidx.work.WorkManager
 import androidx.work.WorkRequest
 import androidx.work.WorkerParameters
 import me.capcom.smsgateway.R
+import me.capcom.smsgateway.modules.account.PauseGate
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.messages.MessagesService
@@ -28,6 +29,10 @@ class SendMessagesWorker(appContext: Context, params: WorkerParameters) :
     private val notificationsSvc: NotificationsService by inject()
 
     override suspend fun doWork(): Result {
+        // V2-L23: a paused phone sends nothing; what is queued waits for the resume
+        // (the resume starts this worker again).
+        if (PauseGate.isPaused()) return Result.success()
+
         logsService.insert(
             LogEntry.Priority.DEBUG,
             NAME,

@@ -79,6 +79,15 @@ class GatewayService(
         this._api = null
     }
 
+    /**
+     * V2-L23: «إيقاف مؤقت» stops only the pulling: the pull worker and the live stream.
+     * The events receiver and the state reports stay up (state events have no replay).
+     */
+    fun pausePulling(context: Context) {
+        SSEForegroundService.stop(context)
+        PullMessagesWorker.stop(context)
+    }
+
     fun isActiveLiveData(context: Context) = PullMessagesWorker.getStateLiveData(context)
     //endregion
 
@@ -178,6 +187,7 @@ class GatewayService(
 
             this.settings.fcmToken = pushToken
             this.settings.registrationInfo = response
+            this.settings.recordContact()
 
             events.emit(
                 DeviceRegisteredEvent.Success(
@@ -218,6 +228,7 @@ class GatewayService(
         )
 
         this.settings.fcmToken = pushToken
+        this.settings.recordContact()
 
         events.emit(
             DeviceRegisteredEvent.Success(
@@ -248,12 +259,16 @@ class GatewayService(
     //region Messages
     internal suspend fun getNewMessages(context: Context) {
         if (!settings.enabled) return
+        // V2-L23: the one sink of every pull (worker, push, SSE connect and watchdog, ping):
+        // a paused phone neither pulls nor sends.
+        if (me.capcom.smsgateway.modules.account.PauseGate.isPaused()) return
         val settings = settings.registrationInfo ?: return
         val processingOrder = when (messagesService.processingOrder) {
             MessagesSettings.ProcessingOrder.LIFO -> GatewayApi.ProcessingOrder.LIFO
             MessagesSettings.ProcessingOrder.FIFO -> GatewayApi.ProcessingOrder.FIFO
         }
         val messages = api.getMessages(settings.token, processingOrder)
+        this.settings.recordContact()
         for (message in messages) {
             try {
                 processMessage(context, message)
@@ -270,6 +285,11 @@ class GatewayService(
                 th.printStackTrace()
             }
         }
+    }
+
+    // V2-L23. Looked up lazily so this class keeps its constructor.
+    private val pauseStore: me.capcom.smsgateway.modules.account.PauseStore by lazy {
+        org.koin.core.context.GlobalContext.get().get<me.capcom.smsgateway.modules.account.AccountSettings>()
     }
 
     private suspend fun processMessage(context: Context, message: GatewayApi.Message) {
@@ -293,7 +313,15 @@ class GatewayService(
             return
         }
 
-        val request = SendRequest(
+        // V2-L23: a message that was held past the limit by the last pause is failed
+        // before it is enqueued, so nothing can send it late.
+        enqueueUnlessHeld(message, pauseStore, System.currentTimeMillis(), ::sendState) {
+            messagesService.enqueueMessage(toSendRequest(message))
+        }
+    }
+
+    private fun toSendRequest(message: GatewayApi.Message): SendRequest {
+        return SendRequest(
             EntitySource.Cloud,
             me.capcom.smsgateway.modules.messages.data.Message(
                 message.id,
@@ -328,7 +356,6 @@ class GatewayService(
                 priority = message.priority,
             )
         )
-        messagesService.enqueueMessage(request)
     }
 
     internal suspend fun sendState(
@@ -384,7 +411,7 @@ class GatewayService(
     internal suspend fun getSettings(): Map<String, *>? {
         val settings = settings.registrationInfo ?: return null
 
-        return api.getSettings(settings.token)
+        return api.getSettings(settings.token).also { this.settings.recordContact() }
     }
     //endregion
 
@@ -447,4 +474,56 @@ internal suspend fun handleCloudCancel(
     } catch (_: IllegalStateException) {
         // message not in Pending state — already sent/cancelled
     }
+}
+
+/**
+ * V2-L23: the only way a pulled message reaches the send queue. The drop rule runs first;
+ * [enqueue] is called only for a message that was not held too long, so a stale message
+ * is never enqueued.
+ */
+internal suspend fun enqueueUnlessHeld(
+    message: GatewayApi.Message,
+    store: me.capcom.smsgateway.modules.account.PauseStore,
+    nowMs: Long,
+    sendFailed: suspend (GatewayApi.MessagePatchRequest) -> Unit,
+    enqueue: suspend () -> Unit,
+) {
+    if (handlePauseHold(message, store, nowMs, sendFailed)) return
+    enqueue()
+}
+
+/**
+ * V2-L23: the drop rule of the last pause, applied to a pulled message BEFORE it is
+ * enqueued. A message the pause held longer than the limit is reported to the platform
+ * as Failed with "TTL expired" (mapped to EXPIRED and refunded there) and never reaches
+ * the send queue. Returns true when the message was dropped.
+ */
+internal suspend fun handlePauseHold(
+    message: GatewayApi.Message,
+    store: me.capcom.smsgateway.modules.account.PauseStore,
+    nowMs: Long,
+    sendFailed: suspend (GatewayApi.MessagePatchRequest) -> Unit
+): Boolean {
+    val createdAt = message.createdAt?.time ?: return false
+    val drop = me.capcom.smsgateway.modules.account.PauseHold.dropOnPull(
+        createdAtMs = createdAt,
+        pausedAtMs = store.pausedAtMs,
+        resumedAtMs = store.resumedAtMs,
+        nowMs = nowMs,
+        holdMaxMin = me.capcom.smsgateway.modules.account.PauseHold.holdMaxMin(store.holdMaxMin),
+    )
+    if (!drop) return false
+
+    val reason = me.capcom.smsgateway.modules.account.StaleSweep.REASON
+    sendFailed(
+        GatewayApi.MessagePatchRequest(
+            message.id,
+            ProcessingState.Failed,
+            message.phoneNumbers.map {
+                GatewayApi.RecipientState(it, ProcessingState.Failed, reason)
+            },
+            mapOf(ProcessingState.Failed to Date(nowMs))
+        )
+    )
+    return true
 }

@@ -48,6 +48,36 @@
             android:text="@string/home_start_service"
             android:visibility="gone" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonHomePause"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/home_pause"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/textHomeSession"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/home_session_ended"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonHomeSignIn"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/home_session_signin"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonHomeReattach"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/home_reattach_retry"
+            android:visibility="gone" />
+
         <com.google.android.material.card.MaterialCardView
             android:id="@+id/cardHomeKeepAlive"
             android:layout_width="match_parent"

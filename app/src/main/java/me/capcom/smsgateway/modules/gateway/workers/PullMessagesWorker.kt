@@ -16,6 +16,7 @@ import androidx.work.WorkerParameters
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import me.capcom.smsgateway.App
+import me.capcom.smsgateway.modules.account.PauseGate
 import java.util.concurrent.TimeUnit
 
 class PullMessagesWorker(
@@ -40,6 +41,8 @@ class PullMessagesWorker(
         const val NAME = "PullMessagesWorker"
 
         fun start(context: Context) {
+            // V2-L23: a paused phone does not schedule pulls (resume starts them again).
+            if (PauseGate.isPaused()) return
             val work = PeriodicWorkRequestBuilder<PullMessagesWorker>(PeriodicWorkRequest.MIN_PERIODIC_INTERVAL_MILLIS, TimeUnit.MILLISECONDS)
                 .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, WorkRequest.MIN_BACKOFF_MILLIS, TimeUnit.MILLISECONDS)
                 .setConstraints(

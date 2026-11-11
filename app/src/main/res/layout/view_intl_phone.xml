@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<merge xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <Spinner
+        android:id="@+id/spinnerIntlCountry"
+        android:layout_width="wrap_content"
+        android:layout_height="56dp"
+        android:contentDescription="@string/intl_phone_country_desc"
+        android:minWidth="120dp" />
+
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/layoutIntlNational"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:hint="@string/intl_phone_hint"
+        app:errorEnabled="true">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/editIntlNational"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="start"
+            android:imeOptions="actionDone"
+            android:inputType="phone"
+            android:textDirection="ltr" />
+    </com.google.android.material.textfield.TextInputLayout>
+</merge>

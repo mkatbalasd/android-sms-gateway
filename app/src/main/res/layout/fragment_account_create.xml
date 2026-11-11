@@ -34,21 +34,10 @@
                 android:maxLength="100" />
         </com.google.android.material.textfield.TextInputLayout>
 
-        <com.google.android.material.textfield.TextInputLayout
-            android:id="@+id/layoutMobile"
+        <me.capcom.smsgateway.ui.account.IntlPhoneView
+            android:id="@+id/phoneMobile"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:hint="@string/account_hint_mobile"
-            app:errorEnabled="true">
-
-            <com.google.android.material.textfield.TextInputEditText
-                android:id="@+id/editMobile"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:gravity="start"
-                android:inputType="phone"
-                android:textDirection="ltr" />
-        </com.google.android.material.textfield.TextInputLayout>
+            android:layout_height="wrap_content" />
 
         <com.google.android.material.textfield.TextInputLayout
             android:id="@+id/layoutPassword"

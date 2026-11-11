@@ -16,7 +16,7 @@ import java.security.SecureRandom
 /** What complete needs after a crash: the gateway device id and the nonce of the enrolment. */
 data class PendingCompletion(val gatewayDeviceId: String, val nonce: String)
 
-class AccountSettings(private val storage: KeyValueStorage) {
+class AccountSettings(private val storage: KeyValueStorage) : PauseStore {
 
     /** One JSON document under one key: strings with spaces survive the round trip. */
     data class Stored(
@@ -31,6 +31,10 @@ class AccountSettings(private val storage: KeyValueStorage) {
         val linked: Boolean? = null,
         val pending: PendingVerification? = null,
         val pendingCompletion: PendingCompletion? = null,
+        val pausedAtMs: Long? = null,
+        val resumedAtMs: Long? = null,
+        val holdMaxMin: Int? = null,
+        val reattachPending: Boolean? = null,
     ) {
         override fun toString() = "Stored(redacted)"
     }
@@ -100,6 +104,29 @@ class AccountSettings(private val storage: KeyValueStorage) {
     var pendingCompletion: PendingCompletion?
         get() = read().pendingCompletion
         set(value) = update { it.copy(pendingCompletion = value) }
+
+    /** V2-L23: start of the last pause; kept after the resume for the drop rule. Cleared with the account by [reset]. */
+    override var pausedAtMs: Long?
+        get() = read().pausedAtMs
+        set(value) = update { it.copy(pausedAtMs = value) }
+
+    /** V2-L23: end of the last pause; null while paused. */
+    override var resumedAtMs: Long?
+        get() = read().resumedAtMs
+        set(value) = update { it.copy(resumedAtMs = value) }
+
+    /** V2-L23: the platform's `pause_hold_max_min` from app-home. */
+    override var holdMaxMin: Int?
+        get() = read().holdMaxMin
+        set(value) = update { it.copy(holdMaxMin = value) }
+
+    /**
+     * True after a linked phone signed in again and until the platform tied the new app
+     * session to the phone (the re-attach). Survives a crash; cleared by [reset].
+     */
+    var reattachPending: Boolean
+        get() = read().reattachPending == true
+        set(value) = update { it.copy(reattachPending = value) }
 
     /** One write: linked, and nothing left to complete. */
     fun markLinked() = update { it.copy(linked = true, pendingCompletion = null) }

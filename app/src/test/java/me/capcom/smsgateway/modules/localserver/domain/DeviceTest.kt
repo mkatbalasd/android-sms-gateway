@@ -131,4 +131,22 @@ class DeviceTest {
             JsonParser.parseString(json).asJsonObject.keySet()
         )
     }
+
+    @Test
+    fun neverEmitsSimCountryIso() {
+        val json = gson.toJson(
+            device(
+                simCards = listOf(
+                    SimCard(0, 1, "+79990001234", "MTS", "897010112233445", countryIso = "ye")
+                ),
+            )
+        )
+
+        val sim = JsonParser.parseString(json).asJsonObject
+            .getAsJsonArray("simCards")[0].asJsonObject
+        assertEquals(
+            setOf("slotIndex", "simNumber", "phoneNumber", "carrierName", "iccid"),
+            sim.keySet()
+        )
+    }
 }
