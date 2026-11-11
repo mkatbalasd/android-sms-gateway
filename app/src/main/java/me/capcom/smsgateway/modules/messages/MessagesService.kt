@@ -62,6 +62,9 @@ class MessagesService(
      * cannot install a delayed work between the snapshot read and the start call.
      */
     private val sendWorkerLock = Any()
+
+    /** MessagesService is a Koin single, so this is the process-wide gate. */
+    private val sendGate = SendGate()
     val processingOrder
         get() = settings.processingOrder
 
@@ -276,7 +279,15 @@ class MessagesService(
         dao.truncateLog(System.currentTimeMillis() - lifetime * 86400000L)
     }
 
-    internal suspend fun sendPendingMessages() {
+    /**
+     * CARD-21: one send loop at a time. At the unlock handover the in-process loop and the
+     * WorkManager worker can both be alive; the state moves to Processed only after the
+     * send, so without this gate both would send the same message. The second loop waits
+     * here, then finds nothing pending (the per-message lock only orders state changes).
+     */
+    internal suspend fun sendPendingMessages() = sendGate.exclusive { drainPendingMessages() }
+
+    private suspend fun drainPendingMessages() {
         try {
             var previousPriority = Message.PRIORITY_MIN
 
