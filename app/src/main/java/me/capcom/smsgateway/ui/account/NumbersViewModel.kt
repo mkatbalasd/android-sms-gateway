@@ -96,8 +96,7 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
 
     /** SEND_SMS is not granted: the ticked rows say so; nothing was started and nothing was sent. */
     fun permissionDenied() {
-        rows.value.orEmpty().filter { it.ticked && !it.verified && !it.busy }
-            .forEach { target -> change(target.slot) { it.copy(phase = RowPhase.NEEDS_PERMISSION) } }
+        rows.value = NumbersState.markPermissionNeeded(rows.value.orEmpty())
     }
 
     private fun change(slot: Int, change: (NumberRow) -> NumberRow) {

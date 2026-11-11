@@ -284,7 +284,7 @@
     <string name="account_permissions_body">The app asks for three things: sending and receiving messages, reading the phone state, and notifications. They are used to send your business messages and to read the verification code that arrives by SMS.</string>
     <string name="account_permissions_allow">Allow</string>
     <string name="account_permissions_denied">Some permissions were not granted. Without them the phone cannot send messages.</string>
-    <string name="account_permissions_sms_granted_others_missing">The SMS permissions are granted. Only optional ones (phone details, notifications) are still off; you can continue, or open the app settings to allow them.</string>
+    <string name="account_permissions_sms_granted_others_missing">The SMS permissions are granted. Other permissions are still off (phone state, notifications, MMS). You can continue, but the SIM list needs the phone state permission; open the app settings to allow them.</string>
     <string name="account_permissions_open_settings">Open app settings</string>
     <string name="account_permissions_continue">Continue anyway</string>
     <string name="account_create_title">Create an account for your business</string>

@@ -264,7 +264,7 @@
     <string name="account_permissions_body">يطلب التطبيق ثلاثة أمور: إرسال الرسائل واستقبالها، وقراءة حالة الهاتف، والإشعارات. نستخدمها لإرسال رسائل منشأتك ولقراءة رمز التحقق الذي يصل بالرسالة النصية.</string>
     <string name="account_permissions_allow">السماح</string>
     <string name="account_permissions_denied">لم تُمنح بعض الأذونات. بدونها لا يستطيع الهاتف إرسال الرسائل.</string>
-    <string name="account_permissions_sms_granted_others_missing">أذونات الرسائل ممنوحة. الأذونات الاختيارية فقط (بيانات الهاتف والإشعارات) ما زالت مغلقة؛ يمكنك المتابعة أو فتح إعدادات التطبيق للسماح بها.</string>
+    <string name="account_permissions_sms_granted_others_missing">أذونات الرسائل ممنوحة. ما زالت أذونات أخرى مغلقة (حالة الهاتف والإشعارات والرسائل متعددة الوسائط). يمكنك المتابعة، لكن قائمة الشرائح تحتاج إذن حالة الهاتف؛ افتح إعدادات التطبيق للسماح بها.</string>
     <string name="account_permissions_open_settings">فتح إعدادات التطبيق</string>
     <string name="account_permissions_continue">المتابعة على كل حال</string>
     <string name="account_create_title">إنشاء حساب لمنشأتك</string>

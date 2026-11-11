@@ -3,6 +3,7 @@ package me.capcom.smsgateway.ui.account
 import kotlinx.coroutines.runBlocking
 import me.capcom.smsgateway.modules.account.LineVerifyStart
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 /**
@@ -110,5 +111,26 @@ internal class ProofSendPermissionTest {
         assertEquals(RowPhase.VERIFIED, second.phase)
         assertEquals(1, client.verifyCalls.size)
         assertEquals(1, sender.calls.size)
+    }
+
+    @Test
+    fun aDeniedPermissionKeepsARowThatAsksForANumberAndTheTypedNumber() = runBlocking {
+        val client = FakeAppClient()
+        client.verifyAnswer = { mo }
+        val sender = Sender()
+        val asking = row.copy(phase = RowPhase.NEEDS_NUMBER, typed = "+967700000999", readableNumber = "+967700000714")
+
+        // The verifier leaves it as it is.
+        val result = verifier(client, sender) { false }.verify(asking)
+        assertEquals(asking, result)
+        assertEquals(0, client.verifyCalls.size)
+        assertEquals(0, sender.calls.size)
+
+        // And so does the ViewModel's marking: only an idle ticked row says NEEDS_PERMISSION.
+        val idle = NumberRow(slot = 2, carrier = null, readableNumber = null)
+        val marked = NumbersState.markPermissionNeeded(listOf(asking, idle))
+        assertEquals(asking, marked[0])
+        assertEquals(RowPhase.NEEDS_PERMISSION, marked[1].phase)
+        assertTrue(marked[0].asksForNumber)
     }
 }

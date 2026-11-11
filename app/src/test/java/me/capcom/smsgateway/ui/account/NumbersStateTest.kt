@@ -30,6 +30,7 @@ internal class NumbersStateTest {
             sender = sender,
             delayMs = { clock.now += it },
             nowMs = { clock.now },
+            canSendSms = { true },
         )
 
     private val mo = LineVerifyStart("MO", "+967700000001", "MNASEB 7K2Q-SECRET", 600)
