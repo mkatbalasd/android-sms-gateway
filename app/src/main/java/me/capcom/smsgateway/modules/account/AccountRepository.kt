@@ -88,7 +88,7 @@ class AccountRepository(
         val answer = if (pending.kind == PendingVerification.KIND_SIGNUP) {
             api.signupVerify(SignupVerifyRequest(pending.id, code))
         } else {
-            api.loginVerify(LoginVerifyRequest(pending.id, code, device()))
+            api.loginVerify(LoginVerifyRequest(pending.id, code, device(), reattach = if (resign) true else null))
         }
         // A linked phone signing in again must be the account that owns it: another
         // account's session and identity are dropped, never stored. Fails closed: a linked
