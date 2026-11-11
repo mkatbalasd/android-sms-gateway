@@ -10,6 +10,7 @@ import android.os.PowerManager
 import android.util.Log
 import me.capcom.smsgateway.R
 import me.capcom.smsgateway.helpers.SSEManager
+import me.capcom.smsgateway.modules.connection.ConnectionService
 import me.capcom.smsgateway.modules.events.ExternalEvent
 import me.capcom.smsgateway.modules.events.ExternalEventType
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
@@ -27,6 +28,7 @@ class SSEForegroundService : Service() {
 
     private val notificationsSvc: NotificationsService by inject()
     private val logsService: LogsService by inject()
+    private val connectionService: ConnectionService by inject()
 
     private val wakeLock: PowerManager.WakeLock by lazy {
         (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
@@ -81,6 +83,16 @@ class SSEForegroundService : Service() {
                         )
                     }
                 }
+                // CARD V2-L19: quiet for over a minute: pull now, same pull as on connect,
+                // so delivery never waits for WorkManager's 15-minute floor.
+                onSilent = { onConnected?.invoke() }
+                onWatchdogReconnect = { seconds ->
+                    logsService.insert(
+                        LogEntry.Priority.WARN,
+                        "SSEForegroundService",
+                        "SSE silent for ${seconds}s, reconnecting",
+                    )
+                }
             }
     }
 
@@ -93,6 +105,9 @@ class SSEForegroundService : Service() {
         if (!wifiLock.isHeld) {
             wifiLock.acquire()
         }
+
+        // CARD V2-L19: replace the stream as soon as the network is back.
+        connectionService.onNetworkAvailable = { sseManager.reconnectNow() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -131,6 +146,7 @@ class SSEForegroundService : Service() {
 
     override fun onDestroy() {
         sseManager.disconnect()
+        connectionService.onNetworkAvailable = null
         if (wifiLock.isHeld) {
             wifiLock.release()
         }
