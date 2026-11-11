@@ -2,18 +2,23 @@
 <!-- Mnaseb SIM v0.3.0: nothing is backed up or transferred to another phone.
      The gateway registration, the signing key and the account tokens stay on this phone.
      CARD-21: the device-protected copies (device_*) are excluded too; the gateway token,
-     the signing key and the message database live there. -->
-<data-extraction-rules>
+     the signing key and the message database live there.
+     tools:ignore="FullBackupContent" sits on the device_* elements only: the AGP 8.1.2 lint
+     applies the full-backup domain list (root, file, database, sharedpref, external) to
+     data-extraction rules, but device_* domains are valid in the Android 12 data-extraction
+     schema, and android:allowBackup="false" does not stop device-to-device transfer on API 31+.
+     DataExtractionRulesTest pins both the excludes and the targeted ignore. -->
+<data-extraction-rules xmlns:tools="http://schemas.android.com/tools">
     <cloud-backup>
         <exclude domain="root" path="." />
         <exclude domain="file" path="." />
         <exclude domain="database" path="." />
         <exclude domain="sharedpref" path="." />
         <exclude domain="external" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="device_file" path="." />
-        <exclude domain="device_database" path="." />
-        <exclude domain="device_sharedpref" path="." />
+        <exclude domain="device_root" path="." tools:ignore="FullBackupContent" />
+        <exclude domain="device_file" path="." tools:ignore="FullBackupContent" />
+        <exclude domain="device_database" path="." tools:ignore="FullBackupContent" />
+        <exclude domain="device_sharedpref" path="." tools:ignore="FullBackupContent" />
     </cloud-backup>
     <device-transfer>
         <exclude domain="root" path="." />
@@ -21,9 +26,9 @@
         <exclude domain="database" path="." />
         <exclude domain="sharedpref" path="." />
         <exclude domain="external" path="." />
-        <exclude domain="device_root" path="." />
-        <exclude domain="device_file" path="." />
-        <exclude domain="device_database" path="." />
-        <exclude domain="device_sharedpref" path="." />
+        <exclude domain="device_root" path="." tools:ignore="FullBackupContent" />
+        <exclude domain="device_file" path="." tools:ignore="FullBackupContent" />
+        <exclude domain="device_database" path="." tools:ignore="FullBackupContent" />
+        <exclude domain="device_sharedpref" path="." tools:ignore="FullBackupContent" />
     </device-transfer>
 </data-extraction-rules>

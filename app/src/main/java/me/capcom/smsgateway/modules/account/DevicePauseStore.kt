@@ -18,8 +18,8 @@ import me.capcom.smsgateway.modules.settings.get
  * exception as "paused" (see [PauseGate], [enqueueUnlessHeld] in the gateway module): the
  * pause fails closed, never open.
  *
- * Holds no secret: three timestamps/numbers. Excluded from backup by the extraction rules
- * (domain `device_sharedpref`).
+ * Holds no secret: three timestamps/numbers. Excluded from backup and device transfer by the
+ * extraction rules (domain `device_sharedpref`).
  */
 class DevicePauseStore(
     private val storage: KeyValueStorage,

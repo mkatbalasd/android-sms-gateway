@@ -58,3 +58,11 @@ jobs:
 
       - name: Unit tests
         run: ./gradlew test
+
+      # The same fatal lint that fails `assembleRelease` in mnaseb-sim-release.yml
+      # (lintVitalRelease), so a release-only lint error fails the PR, not the tag build.
+      # No keystore on a PR: release is built unsigned, as in the release workflow.
+      - name: Release lint (lintVitalRelease)
+        run: |
+          test ! -f app/keystore.jks
+          ./gradlew :app:lintVitalRelease
