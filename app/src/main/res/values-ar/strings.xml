@@ -345,7 +345,12 @@
     <string name="numbers_number_ends">الرقم ينتهي بـ %1$s</string>
     <string name="numbers_number_unknown">الرقم غير معروف</string>
     <string name="numbers_verified_number">%1$s</string>
-    <string name="numbers_type_number">رقم هذه الشريحة (بالصيغة الدولية)</string>
+    <string name="numbers_type_number">رقم هذه الشريحة</string>
+    <string name="intl_phone_hint">رقم الجوال</string>
+    <string name="intl_phone_hint_optional">رقم هذه الشريحة (اختياري)</string>
+    <string name="intl_phone_error">أدخل رقم جوال صحيحًا للدولة المختارة</string>
+    <string name="intl_phone_choose_country">اختر الدولة</string>
+    <string name="intl_phone_country_desc">الدولة ورمز الاتصال</string>
     <string name="numbers_cost_note">يرسل الهاتف رسالة واحدة من كل شريحة إلى خط مناسب (بتكلفة رسالة واحدة).</string>
     <string name="numbers_verify_now">تحقق الآن</string>
     <string name="numbers_continue">متابعة</string>

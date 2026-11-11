@@ -8,7 +8,13 @@ import kotlinx.coroutines.CancellationException
 import java.io.IOException
 
 /** One SIM the phone reports. [slot] is the platform's 1-based number; [readableNumber] is only a hint. */
-data class SimSlot(val slot: Int, val carrier: String?, val readableNumber: String?)
+data class SimSlot(
+    val slot: Int,
+    val carrier: String?,
+    val readableNumber: String?,
+    /** This SIM's own country (SubscriptionInfo.countryIso), for the country preselection of its row. */
+    val countryIso: String? = null,
+)
 
 enum class RowPhase {
     IDLE,
@@ -42,6 +48,7 @@ data class NumberRow(
     val verifiedMasked: String? = null,
     val verifiedAt: String? = null,
     val retryMinutes: Int? = null,
+    val countryIso: String? = null,
 ) {
     val busy: Boolean
         get() = phase == RowPhase.STARTING || phase == RowPhase.SENDING || phase == RowPhase.WAITING
@@ -72,15 +79,18 @@ object NumbersState {
                     method = proved.method,
                     verifiedMasked = proved.msisdnMasked,
                     verifiedAt = proved.verifiedAt,
+                    countryIso = sim.countryIso,
                 )
             } else {
-                NumberRow(sim.slot, sim.carrier, sim.readableNumber)
+                NumberRow(sim.slot, sim.carrier, sim.readableNumber, countryIso = sim.countryIso)
             }
         }
 
     /** [تحقق الآن] is enabled when something is ticked, not verified and nothing is running. */
     fun canVerify(rows: List<NumberRow>): Boolean =
-        rows.none { it.busy } && rows.any { it.ticked && !it.verified }
+        rows.none { it.busy } && rows.any { it.ticked && !it.verified } &&
+            // A row whose number is REQUIRED (the platform asked for it) waits for a valid one.
+            rows.none { it.ticked && !it.verified && it.phase == RowPhase.NEEDS_NUMBER && it.typed.isBlank() }
 
     /** The keeper may continue when at least one number is verified and nothing is running. */
     fun canContinue(rows: List<NumberRow>): Boolean =

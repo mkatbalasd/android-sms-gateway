@@ -270,6 +270,7 @@ object SubscriptionsHelper {
                 },
                 carrierName = info.carrierName?.toString()?.takeIf { it.isNotBlank() },
                 iccid = info.iccId?.takeIf { it.isNotBlank() },
+                countryIso = info.countryIso?.takeIf { it.isNotBlank() },
             )
         }
     }
