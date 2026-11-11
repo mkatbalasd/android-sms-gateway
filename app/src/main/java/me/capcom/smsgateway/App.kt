@@ -83,7 +83,12 @@ class App: Application() {
         // orchestrator starts, so a boot before the UI opens cannot start it.
         get<LocalServerSettings>().enabled = false
 
-        get<OrchestratorService>().start(this, true)
+        // CARD-21: a process started before the first unlock (a direct-boot component)
+        // must not start WorkManager-based work. The boot receiver starts `LockedMode`
+        // instead, and the full start runs once the user is unlocked.
+        if (DeviceStorage.isUnlocked(this)) {
+            get<OrchestratorService>().start(this, true)
+        }
     }
 
     val gatewayService: GatewayService by inject()
