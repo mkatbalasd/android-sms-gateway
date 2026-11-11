@@ -106,12 +106,28 @@ class PermissionsFragment : Fragment() {
         ActivityResultContracts.RequestMultiplePermissions()
     ) {
         val ctx = context ?: return@registerForActivityResult
-        if (AccountPermissions.missing(ctx).isEmpty()) {
+        val state = AccountPermissions.state(ctx)
+        if (state.allGranted) {
             accountViewModel().permissionsDone()
         } else {
             // A prompt that never appeared, or a refusal: explain, never block.
-            _binding?.layoutDenied?.isVisible = true
+            showDenied(state)
         }
+    }
+
+    /**
+     * Draws what the phone really granted (checkSelfPermission), never an assumption. When the
+     * three SMS permissions are granted the screen says so and only the others are open; the
+     * «Allow restricted settings» note appears only while an SMS permission is really missing.
+     */
+    private fun showDenied(state: PermissionState) {
+        val b = _binding ?: return
+        b.layoutDenied.isVisible = true
+        b.textDenied.setText(
+            if (state.smsGranted) R.string.account_permissions_sms_granted_others_missing
+            else R.string.account_permissions_denied
+        )
+        b.textRestrictedNote.isVisible = !state.smsGranted
     }
 
     override fun onCreateView(
@@ -145,11 +161,13 @@ class PermissionsFragment : Fragment() {
 
     override fun onResume() {
         super.onResume()
-        // Back from the app settings with everything allowed.
-        if (_binding?.layoutDenied?.isVisible == true &&
-            AccountPermissions.missing(requireContext()).isEmpty()
-        ) {
+        // Re-evaluated from the real grant state every time the screen returns (back from the
+        // app settings, or from a system prompt): all allowed continues, otherwise redraw.
+        val state = AccountPermissions.state(requireContext())
+        if (state.allGranted) {
             accountViewModel().permissionsDone()
+        } else if (_binding?.layoutDenied?.isVisible == true) {
+            showDenied(state)
         }
     }
 

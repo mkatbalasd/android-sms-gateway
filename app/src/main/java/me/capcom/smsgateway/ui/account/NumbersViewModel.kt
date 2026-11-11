@@ -35,6 +35,8 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
         delayMs = { delay(it) },
         nowMs = { System.currentTimeMillis() },
         guard = ProofAttemptGuard(PrefsAttemptLog(application)) { System.currentTimeMillis() },
+        // The real runtime grant, read at each check; never a cached or assumed value.
+        canSendSms = { AccountPermissions.canSendSms(application) },
     )
 
     /** Reads the SIM cards and what the platform already verified. Idempotent. */
@@ -69,6 +71,11 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
         val current = rows.value.orEmpty()
         if (!NumbersState.canVerify(current)) return
         val targets = current.filter { it.ticked && !it.verified }
+        // SEND_SMS first: without it nothing is started, the keeper is asked to allow it.
+        if (!AccountPermissions.canSendSms(getApplication<Application>())) {
+            permissionDenied()
+            return
+        }
         // Mark them busy before the first suspension, so a second tap finds them running.
         targets.forEach { target -> change(target.slot) { it.copy(phase = RowPhase.STARTING) } }
         viewModelScope.launch {
@@ -85,6 +92,12 @@ class NumbersViewModel(application: Application) : AndroidViewModel(application)
                 }
             }.awaitAll()
         }
+    }
+
+    /** SEND_SMS is not granted: the ticked rows say so; nothing was started and nothing was sent. */
+    fun permissionDenied() {
+        rows.value.orEmpty().filter { it.ticked && !it.verified && !it.busy }
+            .forEach { target -> change(target.slot) { it.copy(phase = RowPhase.NEEDS_PERMISSION) } }
     }
 
     private fun change(slot: Int, change: (NumberRow) -> NumberRow) {

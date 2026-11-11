@@ -32,6 +32,9 @@ enum class RowPhase {
 
     /** A check is open on the platform and this screen has no text to resend: retry in [NumberRow.retryMinutes]. */
     OPEN_PROOF,
+
+    /** SEND_SMS is not granted: nothing was asked of the platform and nothing was sent. */
+    NEEDS_PERMISSION,
     FAILED,
 }
 
@@ -125,6 +128,11 @@ class NumbersVerifier(
     private val pollIntervalMs: Long = POLL_INTERVAL_MS,
     private val timeoutMs: Long = TIMEOUT_MS,
     private val guard: ProofAttemptGuard = ProofAttemptGuard(MemoryAttemptLog(), nowMs),
+    /**
+     * True when SEND_SMS is granted right now. Asked before the platform is contacted and
+     * again immediately before the radio; the app passes the real runtime grant state.
+     */
+    private val canSendSms: () -> Boolean = { true },
 ) {
 
     /** Slots with a proof in progress: a second trigger on the same slot is a no-op. */
@@ -152,6 +160,8 @@ class NumbersVerifier(
     }
 
     private suspend fun verifyOnce(row: NumberRow, onPhase: (RowPhase) -> Unit): NumberRow {
+        // No SEND_SMS, no proof: do not even ask the platform to open one (it would burn an attempt).
+        if (!canSendSms()) return row.copy(phase = RowPhase.NEEDS_PERMISSION)
         onPhase(RowPhase.STARTING)
 
         // The last tap's SMS did not leave and its token is still open: send that same text again.
@@ -192,6 +202,12 @@ class NumbersVerifier(
     }
 
     private suspend fun send(row: NumberRow, proof: Unsent, onPhase: (RowPhase) -> Unit): NumberRow {
+        // The permission may have been revoked since the start: check at the last moment. The
+        // started token is kept (not spent) so the next tap, once allowed, resends this one text.
+        if (!canSendSms()) {
+            unsent[row.slot] = proof
+            return row.copy(phase = RowPhase.NEEDS_PERMISSION, method = proof.method)
+        }
         // One token, one SMS: record the attempt durably before the radio is asked.
         val key = ProofAttemptGuard.key(row.slot, proof.to, proof.text)
         if (!guard.tryBegin(key)) {

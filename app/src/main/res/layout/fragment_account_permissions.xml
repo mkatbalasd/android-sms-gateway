@@ -43,11 +43,13 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/textDenied"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="@string/account_permissions_denied" />
 
             <TextView
+                android:id="@+id/textRestrictedNote"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"

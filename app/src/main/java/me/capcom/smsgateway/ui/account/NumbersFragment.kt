@@ -1,9 +1,11 @@
 package me.capcom.smsgateway.ui.account
 
+import android.Manifest
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.ViewModelProvider
@@ -23,6 +25,15 @@ class NumbersFragment : Fragment() {
     }
     private val slotViews = HashMap<Int, ItemSimSlotBinding>()
 
+    // The system prompt for SEND_SMS; the proof starts only if it was really granted.
+    private val sendSmsRequest = registerForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) {
+        val ctx = context ?: return@registerForActivityResult
+        if (AccountPermissions.canSendSms(ctx)) viewModel.verifyTicked()
+        else viewModel.permissionDenied()
+    }
+
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?
     ): View {
@@ -32,7 +43,11 @@ class NumbersFragment : Fragment() {
 
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
-        binding.buttonNumbersVerify.setOnClickListener { viewModel.verifyTicked() }
+        binding.buttonNumbersVerify.setOnClickListener {
+            // Checked at the tap, from the real grant state: no permission, no proof, ask for it.
+            if (AccountPermissions.canSendSms(requireContext())) viewModel.verifyTicked()
+            else sendSmsRequest.launch(Manifest.permission.SEND_SMS)
+        }
         binding.buttonNumbersContinue.setOnClickListener { (activity as? NumbersActivity)?.next() }
         binding.buttonNumbersSkip.setOnClickListener { (activity as? NumbersActivity)?.next() }
         viewModel.rows.observe(viewLifecycleOwner) { render(it) }
@@ -135,6 +150,7 @@ class NumbersFragment : Fragment() {
         RowPhase.SEND_FAILED -> getString(R.string.numbers_status_send_failed)
         RowPhase.TIMED_OUT -> getString(R.string.numbers_status_timeout)
         RowPhase.NEEDS_NUMBER -> getString(R.string.numbers_status_needs_number)
+        RowPhase.NEEDS_PERMISSION -> getString(R.string.numbers_status_needs_permission)
         RowPhase.OPEN_PROOF -> getString(R.string.numbers_status_open_proof, row.retryMinutes ?: 10)
         RowPhase.FAILED -> AccountMessages.text(
             requireContext(), UiError(row.errorCode ?: UiError.GENERIC)
