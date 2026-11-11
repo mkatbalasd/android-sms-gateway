@@ -111,6 +111,12 @@
             </intent-filter>
         </receiver>
 
+        <!-- CARD-21: our own relaunch alarm only (explicit PendingIntent); not exported. -->
+        <receiver
+            android:name=".receivers.RelaunchReceiver"
+            android:enabled="true"
+            android:exported="false" />
+
         <service
             android:name=".modules.localserver.WebService"
             android:enabled="true"

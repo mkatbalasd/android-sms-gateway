@@ -7,6 +7,7 @@ import kotlinx.coroutines.withContext
 import me.capcom.smsgateway.data.AppDatabase
 import me.capcom.smsgateway.helpers.SettingsHelper
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
+import me.capcom.smsgateway.modules.gateway.SessionPassword
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
 import me.capcom.smsgateway.modules.webhooks.WebhookPayloadStorage
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment

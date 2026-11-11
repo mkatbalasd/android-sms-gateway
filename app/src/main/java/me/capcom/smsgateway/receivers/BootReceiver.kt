@@ -18,6 +18,10 @@ import org.koin.core.component.get
 class BootReceiver : BroadcastReceiver(), KoinComponent {
 
     override fun onReceive(context: Context, intent: Intent) {
+        // This receiver is exported. The app-private relaunch action belongs to the
+        // non-exported RelaunchReceiver; here it would be a forged intent.
+        if (intent.action == BootPolicy.RELAUNCH) return
+
         val action = BootPolicy.decide(
             action = intent.action,
             isUnlocked = DeviceStorage.isUnlocked(context),

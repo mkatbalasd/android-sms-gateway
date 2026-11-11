@@ -10,7 +10,7 @@ import android.os.Build
 import android.util.Log
 import androidx.core.os.UserManagerCompat
 import me.capcom.smsgateway.receivers.BootPolicy
-import me.capcom.smsgateway.receivers.BootReceiver
+import me.capcom.smsgateway.receivers.RelaunchReceiver
 import java.io.File
 import java.io.IOException
 import kotlin.system.exitProcess
@@ -151,7 +151,7 @@ object DeviceStorage {
 
     /**
      * Exits this process and brings the app back with an app-private action (never the protected
-     * BOOT_COMPLETED, which the system refuses from a non-system sender); [BootReceiver] maps it
+     * BOOT_COMPLETED, which the system refuses from a non-system sender); [RelaunchReceiver] (not exported) maps it
      * to the full start through `BootPolicy`.
      */
     fun exitAndRelaunch(app: Context) {
@@ -159,7 +159,7 @@ object DeviceStorage {
             val relaunch = PendingIntent.getBroadcast(
                 app,
                 0,
-                Intent(BootPolicy.RELAUNCH).setClass(app, BootReceiver::class.java),
+                Intent(BootPolicy.RELAUNCH).setClass(app, RelaunchReceiver::class.java),
                 PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
             )
             (app.getSystemService(Context.ALARM_SERVICE) as AlarmManager)
