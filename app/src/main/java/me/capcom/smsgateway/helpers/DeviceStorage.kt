@@ -21,6 +21,7 @@ object DeviceStorage {
     private const val FLAG_FILE = "mnaseb_device_storage"
     private const val FLAG_KEY = "migrated_v1"
     private const val REGISTRATION_INFO_KEY = "gateway.REGISTRATION_INFO"
+    private val REMOVED_KEYS = listOf("localserver.PASSWORD", "localserver.JWT_SECRET")
 
     /** The context whose files are device-protected (API 24+); the same context below that. */
     fun deContext(context: Context): Context =
@@ -55,10 +56,14 @@ object DeviceStorage {
             movePrefs = { de.moveSharedPreferencesFrom(ce, prefsName) },
             scrubPassword = {
                 val prefs = de.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                RegistrationInfoScrubber.scrub(prefs.getString(REGISTRATION_INFO_KEY, null))
-                    ?.let { scrubbed ->
-                        prefs.edit(commit = true) { putString(REGISTRATION_INFO_KEY, scrubbed) }
-                    }
+                val scrubbed = RegistrationInfoScrubber.scrub(
+                    prefs.getString(REGISTRATION_INFO_KEY, null)
+                )
+                prefs.edit(commit = true) {
+                    if (scrubbed != null) putString(REGISTRATION_INFO_KEY, scrubbed)
+                    // Mnaseb never runs the local server; these are regenerated if ever needed.
+                    REMOVED_KEYS.forEach { remove(it) }
+                }
             },
             dbSourceExists = { ce.getDatabasePath(DATABASE_NAME).exists() },
             moveDb = { de.moveDatabaseFrom(ce, DATABASE_NAME) },
