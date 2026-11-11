@@ -15,6 +15,7 @@ data class SimCard(
     val phoneNumber: String?,
     val carrierName: String?,
     val iccid: String?,
-    /** ISO country of this SIM (lower case), when the platform reports it. Not part of the local API. */
+    /** ISO country of this SIM (lower case), when the platform reports it. Never serialized (@Transient): not part of the local API or webhooks. */
+    @Transient
     val countryIso: String? = null,
 )
