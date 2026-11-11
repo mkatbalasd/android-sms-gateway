@@ -4,6 +4,7 @@ import me.capcom.smsgateway.modules.account.AccountException
 import me.capcom.smsgateway.modules.account.AppClient
 import me.capcom.smsgateway.modules.account.AppLine
 import me.capcom.smsgateway.modules.account.LineVerifyStart
+import kotlinx.coroutines.CancellationException
 import java.io.IOException
 
 /** One SIM the phone reports. [slot] is the platform's 1-based number; [readableNumber] is only a hint. */
@@ -91,8 +92,15 @@ object NumbersState {
 
 /** Sends one SMS from a SIM slot (1-based). Returns false when the phone could not send it. */
 interface LineSmsSender {
+    /**
+     * False or an exception: the radio definitely did not send. [SendOutcomeUnknown]: the
+     * hand-over was made but the radio never answered, so the system may still deliver it.
+     */
     suspend fun send(slot: Int, to: String, text: String): Boolean
 }
+
+/** The SMS was handed to the system and its sent-status never came: it may still go out later. */
+class SendOutcomeUnknown : Exception("sent status not received")
 
 /**
  * The proof of one SIM: ask the platform to start it, send the one SMS from that slot,
@@ -106,7 +114,11 @@ class NumbersVerifier(
     private val nowMs: () -> Long,
     private val pollIntervalMs: Long = POLL_INTERVAL_MS,
     private val timeoutMs: Long = TIMEOUT_MS,
+    private val guard: ProofAttemptGuard = ProofAttemptGuard(MemoryAttemptLog(), nowMs),
 ) {
+
+    /** Slots with a proof in progress: a second trigger on the same slot is a no-op. */
+    private val running = HashSet<Int>()
 
     /**
      * A started proof whose SMS could not be sent. Kept in memory only, for one resend while
@@ -121,6 +133,15 @@ class NumbersVerifier(
 
     /** Runs the proof for [row] and returns the row in its final phase. [onPhase] reports the steps. */
     suspend fun verify(row: NumberRow, onPhase: (RowPhase) -> Unit = {}): NumberRow {
+        synchronized(running) { if (!running.add(row.slot)) return row }
+        try {
+            return verifyOnce(row, onPhase)
+        } finally {
+            synchronized(running) { running.remove(row.slot) }
+        }
+    }
+
+    private suspend fun verifyOnce(row: NumberRow, onPhase: (RowPhase) -> Unit): NumberRow {
         onPhase(RowPhase.STARTING)
 
         // The last tap's SMS did not leave and its token is still open: send that same text again.
@@ -161,14 +182,28 @@ class NumbersVerifier(
     }
 
     private suspend fun send(row: NumberRow, proof: Unsent, onPhase: (RowPhase) -> Unit): NumberRow {
+        // One token, one SMS: record the attempt durably before the radio is asked.
+        val key = ProofAttemptGuard.key(row.slot, proof.to, proof.text)
+        if (!guard.tryBegin(key)) {
+            unsent.remove(row.slot)
+            return row.copy(phase = RowPhase.OPEN_PROOF, method = proof.method, retryMinutes = PROOF_TTL_MINUTES)
+        }
         onPhase(RowPhase.SENDING)
         // MO: to the platform line. LOOPBACK: to the typed number, which the platform returns as `to`.
         val sent = try {
             sender.send(row.slot, proof.to, proof.text)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: SendOutcomeUnknown) {
+            // It may still leave the phone: never resend it, never give the attempt back.
+            unsent.remove(row.slot)
+            return await(row.copy(method = proof.method), onPhase)
         } catch (e: Exception) {
             false
         }
         if (!sent) {
+            // A definite failure: this one text may be resent once, by an explicit next tap.
+            guard.release(key)
             unsent[row.slot] = proof
             return row.copy(phase = RowPhase.SEND_FAILED, method = proof.method)
         }
