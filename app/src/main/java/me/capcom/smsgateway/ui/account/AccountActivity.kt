@@ -37,6 +37,13 @@ class AccountActivity : AppCompatActivity() {
             if (state is EnrolmentState.Linked) setResult(RESULT_OK)
         }
 
+        viewModel.resignedIn.observe(this) { done ->
+            if (done == true) {
+                setResult(RESULT_SIGNED_IN)
+                finish()
+            }
+        }
+
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 if (!viewModel.back()) finish()
@@ -82,6 +89,9 @@ class AccountActivity : AppCompatActivity() {
 
     companion object {
         const val RESULT_USE_LINK_CODE = Activity.RESULT_FIRST_USER
+
+        /** A linked phone signed in again: its app session is back, its link was never touched. */
+        const val RESULT_SIGNED_IN = Activity.RESULT_FIRST_USER + 1
 
         fun starter(context: Context) = Intent(context, AccountActivity::class.java)
     }

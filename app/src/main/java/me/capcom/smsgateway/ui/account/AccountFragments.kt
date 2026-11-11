@@ -284,7 +284,10 @@ class SignInFragment : Fragment() {
         val ctx = requireContext()
 
         binding.buttonSignInSubmit.setOnClickListener { submit(viewModel) }
-        binding.buttonSignInBack.setOnClickListener { viewModel.back() }
+        binding.buttonSignInBack.setOnClickListener {
+            // A linked phone signing in again has no welcome screen: back closes the screen.
+            if (!viewModel.back()) requireActivity().finish()
+        }
 
         viewModel.busy.observe(viewLifecycleOwner) { busy ->
             binding.buttonSignInSubmit.isEnabled = !busy

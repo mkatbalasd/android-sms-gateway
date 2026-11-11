@@ -27,30 +27,112 @@ internal class HomeStatusTest {
     // region the three sentences
 
     @Test
-    fun aHealthyPhoneSeenAMinuteAgoIsWorking() {
+    fun aHealthyPhoneSeenAMinuteAgoIsWorkingWithoutAnAgo() {
+        // A normal gap between pings is not staleness: «يعمل» alone.
         val status = HomeStatus.phoneStatus(healthy, now - minute, now)
-        assertEquals(PhoneStatus.Working(agoMinutes = 1, batteryNote = false), status)
+        assertEquals(PhoneStatus.Working(agoMinutes = null, batteryNote = false), status)
     }
 
     @Test
-    fun aPhoneSeenJustNowIsWorkingWithZeroMinutes() {
+    fun aPhoneSeenJustNowIsWorkingWithoutAnAgo() {
         val status = HomeStatus.phoneStatus(healthy, now - 10_000L, now) as PhoneStatus.Working
-        assertEquals(0, status.agoMinutes)
+        assertNull(status.agoMinutes)
     }
 
     @Test
     fun aClockBehindTheServerIsNotTheFuture() {
         val status = HomeStatus.phoneStatus(healthy, now + 5 * minute, now) as PhoneStatus.Working
-        assertEquals(0, status.agoMinutes)
+        assertNull(status.agoMinutes)
     }
 
     @Test
     fun aMissingBatteryExemptionIsANoteNotAStop() {
         val status = HomeStatus.phoneStatus(healthy.copy(batteryExempt = false), now, now)
-        assertEquals(PhoneStatus.Working(0, batteryNote = true), status)
+        assertEquals(PhoneStatus.Working(null, batteryNote = true), status)
         // Unknown (Android older than 6) is not a note.
         val unknown = HomeStatus.phoneStatus(healthy.copy(batteryExempt = null), now, now)
-        assertEquals(PhoneStatus.Working(0, batteryNote = false), unknown)
+        assertEquals(PhoneStatus.Working(null, batteryNote = false), unknown)
+    }
+
+    // The staleness wording comes only after the ping interval plus a grace.
+
+    @Test
+    fun aGapWithinThePingIntervalAndGraceIsPlainWorking() {
+        // Ping every 5 minutes, grace 2: seven minutes is still normal.
+        val atEdge = HomeStatus.phoneStatus(healthy, now - 7 * minute, now, pingIntervalSeconds = 300)
+        assertEquals(PhoneStatus.Working(null, false), atEdge)
+    }
+
+    @Test
+    fun aGapPastThePingIntervalAndGraceNamesTheMinutes() {
+        val late = HomeStatus.phoneStatus(healthy, now - 8 * minute, now, pingIntervalSeconds = 300)
+        assertEquals(PhoneStatus.Working(8, false), late)
+    }
+
+    @Test
+    fun aShortPingIntervalMakesAShortGapWorthMentioning() {
+        // Ping every minute: three minutes is the edge, four is late.
+        assertEquals(
+            PhoneStatus.Working(null, false),
+            HomeStatus.phoneStatus(healthy, now - 3 * minute, now, pingIntervalSeconds = 60)
+        )
+        assertEquals(
+            PhoneStatus.Working(4, false),
+            HomeStatus.phoneStatus(healthy, now - 4 * minute, now, pingIntervalSeconds = 60)
+        )
+    }
+
+    @Test
+    fun withoutAPingIntervalTheDefaultGapApplies() {
+        assertEquals(
+            PhoneStatus.Working(null, false),
+            HomeStatus.phoneStatus(healthy, now - 7 * minute, now, pingIntervalSeconds = null)
+        )
+        assertEquals(
+            PhoneStatus.Working(10, false),
+            HomeStatus.phoneStatus(healthy, now - 10 * minute, now)
+        )
+        // Zero or negative is "no interval", not "everything is late".
+        assertEquals(HomeStatus.expectedGapMs(null), HomeStatus.expectedGapMs(0))
+    }
+
+    @Test
+    fun aLongPingIntervalIsNotCalledOfflineBeforeTwoIntervals() {
+        // Ping every 30 minutes: 40 minutes is late, not offline; 80 is offline.
+        val fortyMin = HomeStatus.phoneStatus(healthy, now - 40 * minute, now, pingIntervalSeconds = 1800)
+        assertEquals(PhoneStatus.Working(40, false), fortyMin)
+        assertEquals(
+            PhoneStatus.Offline,
+            HomeStatus.phoneStatus(healthy, now - 80 * minute, now, pingIntervalSeconds = 1800)
+        )
+    }
+
+    // The connection line is the gateway's; the app session never feeds it.
+
+    @Test
+    fun theConnectionStatusIgnoresTheAppSession() {
+        // Same gateway contact, session revoked or not: the same status (the function has no
+        // session input), and the session line is separate.
+        val status = HomeStatus.phoneStatus(healthy, now - minute, now)
+        assertEquals(PhoneStatus.Working(null, false), status)
+        assertTrue(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = false, lastErrorCode = "APP_SESSION_REVOKED"))
+    }
+
+    @Test
+    fun aLinkedPhoneWithoutAnAppSessionOffersSignIn() {
+        assertTrue(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = false, lastErrorCode = null))
+        for (code in listOf("APP_SESSION_INVALID", "APP_SESSION_REVOKED", "NO_SESSION")) {
+            assertTrue(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = true, lastErrorCode = code))
+        }
+    }
+
+    @Test
+    fun aHealthySessionOrAnUnlinkedPhoneOffersNoSignIn() {
+        assertFalse(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = true, lastErrorCode = null))
+        // A network or server error is not a dead session.
+        assertFalse(HomeStatus.sessionNeedsSignIn(linked = true, hasSession = true, lastErrorCode = "HTTP_503"))
+        // An unlinked phone uses the welcome screens, not this action.
+        assertFalse(HomeStatus.sessionNeedsSignIn(linked = false, hasSession = false, lastErrorCode = "APP_SESSION_INVALID"))
     }
 
     @Test

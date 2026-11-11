@@ -18,13 +18,16 @@ data class LocalChecks(
 
 /** The three sentences of the design (01-flows §1.1), with the numbers they need. */
 sealed class PhoneStatus {
-    /** «يعمل — آخر اتصال قبل N دقيقة»; [agoMinutes] 0 means just now. */
-    data class Working(val agoMinutes: Int, val batteryNote: Boolean) : PhoneStatus()
+    /**
+     * «يعمل»: the gateway has had contact within the expected interval ([agoMinutes] null),
+     * or «يعمل — آخر اتصال قبل N دقيقة» once the gap is longer than a normal ping gap.
+     */
+    data class Working(val agoMinutes: Int?, val batteryNote: Boolean) : PhoneStatus()
 
     /** «متوقف — افتح التطبيق»: something on the phone itself is off. */
     data class Stopped(val reason: Reason) : PhoneStatus()
 
-    /** «الهاتف لا يتصل»: the phone looks fine but the server has not seen it lately. */
+    /** «الهاتف لا يتصل»: the phone looks fine but the gateway has had no contact lately. */
     object Offline : PhoneStatus()
 
     enum class Reason { SERVICE, PERMISSION, SIM }
@@ -34,24 +37,57 @@ enum class ApprovalCard { START, REVIEW, NEEDS_INFO, REJECTED }
 
 object HomeStatus {
 
-    /** The server's liveness poller is the truth: older than this is "not connecting". */
+    /** The gateway's last contact older than this is "not connecting" (a floor; see [offlineAfterMs]). */
     const val FRESH_MS = 15 * 60_000L
 
-    fun phoneStatus(local: LocalChecks, lastSeenAtMs: Long?, nowMs: Long): PhoneStatus {
+    /** Slack on top of the ping interval before a gap is worth mentioning. */
+    const val GRACE_MS = 2 * 60_000L
+
+    /** The expected gap between contacts when no ping interval is set. */
+    const val DEFAULT_EXPECTED_MS = 5 * 60_000L
+
+    /** A gap up to this is normal: the ping interval plus a grace. */
+    fun expectedGapMs(pingIntervalSeconds: Int?): Long =
+        (pingIntervalSeconds?.takeIf { it > 0 }?.let { it * 1000L } ?: DEFAULT_EXPECTED_MS) + GRACE_MS
+
+    fun offlineAfterMs(pingIntervalSeconds: Int?): Long =
+        maxOf(FRESH_MS, 2 * expectedGapMs(pingIntervalSeconds))
+
+    /**
+     * The connection line comes from the gateway only ([lastContactAtMs]: its last good
+     * answer from the server), never from the app session: a revoked sign-in does not make
+     * a linked phone «لا يتصل».
+     */
+    fun phoneStatus(
+        local: LocalChecks,
+        lastContactAtMs: Long?,
+        nowMs: Long,
+        pingIntervalSeconds: Int? = null,
+    ): PhoneStatus {
         when {
             !local.smsPermissionGranted -> return PhoneStatus.Stopped(PhoneStatus.Reason.PERMISSION)
             !local.serviceRunning -> return PhoneStatus.Stopped(PhoneStatus.Reason.SERVICE)
             !local.simPresent -> return PhoneStatus.Stopped(PhoneStatus.Reason.SIM)
         }
-        if (lastSeenAtMs == null) return PhoneStatus.Offline
-        val age = nowMs - lastSeenAtMs
-        // A phone clock a little behind the server is read as "just now", not as the future.
-        if (age > FRESH_MS) return PhoneStatus.Offline
-        return PhoneStatus.Working(
-            agoMinutes = (age.coerceAtLeast(0L) / 60_000L).toInt(),
-            batteryNote = local.batteryExempt == false,
-        )
+        if (lastContactAtMs == null) return PhoneStatus.Offline
+        // A phone clock behind the contact time is read as "just now", not as the future.
+        val age = (nowMs - lastContactAtMs).coerceAtLeast(0L)
+        if (age > offlineAfterMs(pingIntervalSeconds)) return PhoneStatus.Offline
+        val note = local.batteryExempt == false
+        // A normal ping gap is not staleness: say only «يعمل» until the gap is longer.
+        if (age <= expectedGapMs(pingIntervalSeconds)) return PhoneStatus.Working(null, note)
+        return PhoneStatus.Working((age / 60_000L).toInt(), note)
     }
+
+    /** Server answers that mean the app session is over (revoked, expired, never there). */
+    val SESSION_ENDED_CODES = setOf("APP_SESSION_INVALID", "APP_SESSION_REVOKED", "NO_SESSION")
+
+    /**
+     * A linked phone whose app session is gone shows a sign-in action. Its gateway link,
+     * device id and credentials are untouched; only the app session is asked for again.
+     */
+    fun sessionNeedsSignIn(linked: Boolean, hasSession: Boolean, lastErrorCode: String?): Boolean =
+        linked && (!hasSession || lastErrorCode in SESSION_ENDED_CODES)
 
     /** The phone this screen speaks for: the active one the server saw last. */
     fun lastSeenMs(home: AppHome?): Long? =

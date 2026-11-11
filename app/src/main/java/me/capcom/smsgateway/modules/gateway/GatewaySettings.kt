@@ -24,6 +24,19 @@ class GatewaySettings(
         get() = storage.get(REGISTRATION_INFO)
         set(value) = storage.set(REGISTRATION_INFO, value)
 
+    /**
+     * When the gateway last got a good answer from the server (a pull, a device update, a
+     * settings read). The home screen shows the phone's connection from this, never from
+     * the app session. Not a secret; it is a time only.
+     */
+    var lastContactAtMs: Long?
+        get() = storage.get<Long>(LAST_CONTACT_AT_MS)
+        private set(value) = storage.set(LAST_CONTACT_AT_MS, value)
+
+    fun recordContact(nowMs: Long = System.currentTimeMillis()) {
+        lastContactAtMs = nowMs
+    }
+
     var fcmToken: String?
         get() = storage.get(FCM_TOKEN)
         set(value) = storage.set(FCM_TOKEN, value)
@@ -53,6 +66,7 @@ class GatewaySettings(
         private const val REGISTRATION_INFO = "REGISTRATION_INFO"
         private const val ENABLED = "ENABLED"
         private const val FCM_TOKEN = "fcm_token"
+        private const val LAST_CONTACT_AT_MS = "last_contact_at_ms"
 
         private const val CLOUD_URL = "cloud_url"
         private const val PRIVATE_TOKEN = "private_token"

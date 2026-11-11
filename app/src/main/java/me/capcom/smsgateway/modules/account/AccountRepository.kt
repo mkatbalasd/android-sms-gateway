@@ -78,13 +78,19 @@ class AccountRepository(
     }
 
     /** Confirms the pending code. On success the app session is stored and the pending code is cleared. */
-    suspend fun verify(rawCode: String): VerifyOutcome {
+    suspend fun verify(rawCode: String, expectTenantId: String? = null): VerifyOutcome {
         val pending = settings.pending ?: throw AccountException(AccountError("NO_PENDING", 0))
         val code = OtpDigits.normalize(rawCode)
         val answer = if (pending.kind == PendingVerification.KIND_SIGNUP) {
             api.signupVerify(SignupVerifyRequest(pending.id, code))
         } else {
             api.loginVerify(LoginVerifyRequest(pending.id, code, device()))
+        }
+        // A linked phone signing in again must be the account that owns it: another
+        // account's session and identity are dropped, never stored.
+        if (expectTenantId != null && answer.tenant?.id != expectTenantId) {
+            settings.pending = null
+            throw AccountException(AccountError(ACCOUNT_MISMATCH, 0))
         }
         val session = answer.appSession
         settings.saveIdentity(answer.tenant, answer.user)
@@ -191,6 +197,9 @@ class AccountRepository(
     companion object {
         /** The terms text shown to the keeper in rc1; the download page serves the live version in CARD-12. */
         const val TERMS_VERSION = "draft-1"
+
+        /** Raised by the app (not the server): a sign-in again was for another account than the linked phone's. */
+        const val ACCOUNT_MISMATCH = "ACCOUNT_MISMATCH"
 
         private const val MODEL_MAX = 60
         private const val OS_MAX = 40

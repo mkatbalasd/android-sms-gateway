@@ -51,6 +51,9 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
     val pending = MutableLiveData<PendingVerification?>(null)
     val enrolment = MutableLiveData<EnrolmentState>(EnrolmentState.Idle)
 
+    /** The app session of a linked phone is back (sign-in again); the activity closes. */
+    val resignedIn = MutableLiveData(false)
+
     /** The code reader filled the field. */
     val autofilled = MutableLiveData(false)
 
@@ -69,8 +72,17 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
                 screen.value = AccountScreen.LINKING
                 startEnrolment(null)
             }
+
+            // A linked phone whose app session ended: only the sign-in screen, no enrolment.
+            isResignIn() -> screen.value = AccountScreen.SIGN_IN
         }
     }
+
+    /**
+     * True for a phone that is already linked (gateway registered) but has no app session
+     * any more. It signs in again and keeps its link: no enrolment, no new registration.
+     */
+    fun isResignIn(): Boolean = settings.linked && !settings.hasSession
 
     //region Navigation
 
@@ -93,7 +105,13 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     /** The system Back key. Returns false when the activity should close. */
     fun back(): Boolean = when (screen.value) {
-        AccountScreen.PERMISSIONS, AccountScreen.CREATE, AccountScreen.SIGN_IN -> {
+        // Signing in again on a linked phone has no welcome screen to go back to.
+        AccountScreen.SIGN_IN -> if (isResignIn()) false else {
+            screen.value = AccountScreen.WELCOME
+            true
+        }
+
+        AccountScreen.PERMISSIONS, AccountScreen.CREATE -> {
             screen.value = AccountScreen.WELCOME
             true
         }
@@ -122,7 +140,7 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
         repository.discardPending()
         pending.value = null
         autofilled.value = false
-        screen.value = AccountScreen.WELCOME
+        screen.value = if (isResignIn()) AccountScreen.SIGN_IN else AccountScreen.WELCOME
     }
 
     fun errorShown() {
@@ -163,7 +181,15 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
 
     fun submitCode(code: String, fromSms: Boolean = false) {
         val kind = settings.pending?.kind
+        // Decided before the verify stores a session. The tenant that owns the linked phone
+        // is the only account a sign-in again may bring back.
+        val resign = isResignIn()
+        val ownerTenantId = if (resign) settings.tenantId else null
         launchBusy(onFailure = { failure ->
+            if (failure.code == AccountRepository.ACCOUNT_MISMATCH) {
+                pending.value = null
+                screen.value = AccountScreen.SIGN_IN
+            }
             // A dead code (expired, too many attempts) cannot be retried: start over.
             if (failure.code == "OTP_EXPIRED") {
                 repository.discardPending()
@@ -176,12 +202,16 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
             }
         }) {
             autofilled.value = fromSms
-            val outcome = withContext(Dispatchers.IO) { repository.verify(code) }
+            val outcome = withContext(Dispatchers.IO) { repository.verify(code, ownerTenantId) }
             pending.value = null
             if (!outcome.signedIn) {
                 // A repeat of a finished sign-up: no second session is minted from a spent code.
                 info.value = R.string.account_signup_signin_next
                 screen.value = AccountScreen.SIGN_IN
+            } else if (resign) {
+                // The app session is back and the link was never touched: no enrolment runs
+                // (it would register the phone again).
+                resignedIn.value = true
             } else {
                 screen.value = AccountScreen.LINKING
                 startEnrolment(outcome.enrolment)

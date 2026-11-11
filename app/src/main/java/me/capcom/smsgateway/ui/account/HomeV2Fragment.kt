@@ -7,6 +7,7 @@ import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.TextView
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.view.isVisible
 import androidx.fragment.app.Fragment
@@ -26,7 +27,9 @@ import me.capcom.smsgateway.modules.account.AppClient
 import me.capcom.smsgateway.modules.account.AppHome
 import me.capcom.smsgateway.modules.account.KeepAliveChecklist
 import me.capcom.smsgateway.modules.gateway.GatewayService
+import me.capcom.smsgateway.modules.gateway.GatewaySettings
 import me.capcom.smsgateway.modules.orchestrator.OrchestratorService
+import me.capcom.smsgateway.modules.ping.PingSettings
 import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
 import org.koin.android.ext.android.inject
 import java.io.IOException
@@ -47,8 +50,23 @@ class HomeV2Fragment : Fragment() {
     private val gatewaySvc: GatewayService by inject()
     private val orchestratorSvc: OrchestratorService by inject()
 
+    private val gatewaySettings: GatewaySettings by inject()
+    private val pingSettings: PingSettings by inject()
+
     private var home: AppHome? = null
     private var homeFailed = false
+    private var homeErrorCode: String? = null
+
+    // A linked phone with no app session signs in again here; the gateway link stays as it is.
+    private val signInLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == AccountActivity.RESULT_SIGNED_IN) {
+            homeErrorCode = null
+            startPolling()
+        }
+        render()
+    }
     private var serviceRunning = false
     private var pollJob: Job? = null
     private var handoffBusy = false
@@ -72,6 +90,9 @@ class HomeV2Fragment : Fragment() {
             startActivity(NumbersActivity.starter(requireContext()))
         }
         binding.cardHomeKeepAlive.setOnClickListener { showKeepAliveGuide() }
+        binding.buttonHomeSignIn.setOnClickListener {
+            signInLauncher.launch(AccountActivity.starter(requireContext()))
+        }
         binding.buttonHomeStart.setOnClickListener {
             orchestratorSvc.start(requireContext().applicationContext, false)
         }
@@ -117,10 +138,12 @@ class HomeV2Fragment : Fragment() {
         try {
             home = client.home()
             homeFailed = false
+            homeErrorCode = null
         } catch (e: CancellationException) {
             throw e
         } catch (e: AccountException) {
             homeFailed = true
+            homeErrorCode = e.error.code
         } catch (e: IOException) {
             homeFailed = true
         } catch (e: Exception) {
@@ -207,17 +230,24 @@ class HomeV2Fragment : Fragment() {
     }
 
     private fun renderStatus(b: FragmentHomeV2Binding, data: AppHome?) {
-        if (data == null && !homeFailed) {
-            b.textHomeStatus.setText(R.string.home_status_checking)
-            b.buttonHomeStart.isVisible = false
-            return
-        }
+        // The session line is separate from the connection line: a revoked app session says
+        // «سجّل الدخول من جديد» and never makes the phone «لا يتصل».
+        val signIn = HomeStatus.sessionNeedsSignIn(
+            accountSettings.linked, accountSettings.hasSession, homeErrorCode
+        )
+        b.textHomeSession.isVisible = signIn
+        b.buttonHomeSignIn.isVisible = signIn
+
+        // The connection line is the gateway's own last contact, not the app session.
         val status = HomeStatus.phoneStatus(
-            localChecks(), HomeStatus.lastSeenMs(data), System.currentTimeMillis()
+            localChecks(),
+            gatewaySettings.lastContactAtMs,
+            System.currentTimeMillis(),
+            pingSettings.intervalSeconds,
         )
         b.textHomeStatus.text = when (status) {
             is PhoneStatus.Working ->
-                if (status.agoMinutes <= 0) getString(R.string.home_status_working_now)
+                if (status.agoMinutes == null) getString(R.string.home_status_working)
                 else getString(R.string.home_status_working_ago, status.agoMinutes)
 
             is PhoneStatus.Stopped -> getString(
