@@ -3,43 +3,52 @@ package me.capcom.smsgateway.helpers
 import me.capcom.smsgateway.helpers.DeviceStorageMigration.Result
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class DeviceStorageMigrationTest {
 
+    private class FakeStore(
+        override val name: String,
+        private val calls: MutableList<String>,
+        var exists: Boolean = true,
+        var fails: Boolean = false,
+    ) : DeviceStorageMigration.Store {
+        override fun hasSource(): Boolean = exists
+
+        override fun copy() {
+            calls += name
+            if (fails) throw java.io.IOException("boom")
+        }
+    }
+
     private class Fake(
         var unlocked: Boolean = true,
         var done: Boolean = false,
-        var prefsExist: Boolean = true,
-        var dbExist: Boolean = true,
-        var prefsOk: Boolean = true,
-        var dbOk: Boolean = true,
-        var scrubThrows: Boolean = false,
+        prefsExist: Boolean = true,
+        dbExist: Boolean = true,
+        prefsFail: Boolean = false,
+        dbFail: Boolean = false,
     ) {
         val calls = mutableListOf<String>()
+        val prefs = FakeStore("prefs", calls, prefsExist, prefsFail)
+        val db = FakeStore("db", calls, dbExist, dbFail)
 
         fun migration() = DeviceStorageMigration(
             isUnlocked = { unlocked },
             isDone = { done },
-            prefsSourceExists = { prefsExist },
-            movePrefs = { calls += "prefs"; prefsOk },
-            scrubPassword = {
-                calls += "scrub"
-                if (scrubThrows) throw IllegalStateException("boom")
-            },
-            dbSourceExists = { dbExist },
-            moveDb = { calls += "db"; dbOk },
+            stores = listOf(prefs, db),
             markDone = { calls += "flag"; done = true },
         )
     }
 
     @Test
-    fun movesPrefsThenScrubsThenDbThenWritesFlag() {
+    fun copiesPrefsThenDbThenWritesTheFlagLast() {
         val f = Fake()
         assertEquals(Result.DONE, f.migration().run())
-        assertEquals(listOf("prefs", "scrub", "db", "flag"), f.calls)
+        assertEquals(listOf("prefs", "db", "flag"), f.calls)
     }
 
     @Test
@@ -47,6 +56,15 @@ class DeviceStorageMigrationTest {
         val f = Fake()
         assertEquals(Result.DONE, f.migration().run())
         f.calls.clear()
+        assertEquals(Result.ALREADY_DONE, f.migration().run())
+        assertTrue(f.calls.isEmpty())
+    }
+
+    @Test
+    fun neverOverwritesDeviceProtectedDataOnceTheFlagIsSet() {
+        // the flag is the only thing that says the device-protected copy is authoritative:
+        // when it is set, nothing is copied again, whatever the credential-encrypted side holds
+        val f = Fake(done = true)
         assertEquals(Result.ALREADY_DONE, f.migration().run())
         assertTrue(f.calls.isEmpty())
     }
@@ -60,30 +78,69 @@ class DeviceStorageMigrationTest {
     }
 
     @Test
-    fun flagIsNotWrittenWhenPrefsMoveFails() {
-        val f = Fake(prefsOk = false)
-        assertEquals(Result.FAILED, f.migration().run())
-        assertEquals(listOf("prefs"), f.calls)
-        assertFalse(f.done)
+    fun aMigrationDeferredWhileLockedRunsAtTheFirstUnlockedStart() {
+        val f = Fake(unlocked = false)
+        assertEquals(Result.SKIPPED_LOCKED, f.migration().run())
+
+        f.unlocked = true
+        assertEquals(Result.DONE, f.migration().run())
+        assertEquals(listOf("prefs", "db", "flag"), f.calls)
     }
 
     @Test
-    fun flagIsNotWrittenWhenDbMoveFailsAndItIsRetriedLater() {
-        val f = Fake(dbOk = false)
+    fun flagIsNotWrittenWhenThePrefsCopyFails() {
+        val f = Fake(prefsFail = true)
+        val m = f.migration()
+        assertEquals(Result.FAILED, m.run())
+        assertEquals(listOf("prefs"), f.calls)
+        assertFalse(f.done)
+        assertNotNull(m.failure)
+    }
+
+    @Test
+    fun flagIsNotWrittenWhenTheDbCopyFailsAndItIsRetriedLater() {
+        val f = Fake(dbFail = true)
         assertEquals(Result.FAILED, f.migration().run())
-        assertEquals(listOf("prefs", "scrub", "db"), f.calls)
+        assertEquals(listOf("prefs", "db"), f.calls)
         assertFalse(f.done)
 
-        f.dbOk = true
+        f.db.fails = false
         f.calls.clear()
         assertEquals(Result.DONE, f.migration().run())
+        // the retry copies the whole thing again (idempotent), then the flag
+        assertEquals(listOf("prefs", "db", "flag"), f.calls)
         assertTrue(f.done)
     }
 
     @Test
-    fun flagIsNotWrittenWhenAStepThrows() {
-        val f = Fake(scrubThrows = true)
-        assertEquals(Result.FAILED, f.migration().run())
+    fun aFailureNamesTheStoreWithoutAnyContent() {
+        val f = Fake(dbFail = true)
+        val m = f.migration()
+        m.run()
+        assertEquals("db: IOException", m.failure)
+    }
+
+    @Test
+    fun noFailureIsReportedOnSuccess() {
+        val m = Fake().migration()
+        m.run()
+        assertNull(m.failure)
+    }
+
+    @Test
+    fun flagIsNotWrittenWhenAStepThrowsSomethingElse() {
+        val f = Fake()
+        val m = DeviceStorageMigration(
+            isUnlocked = { true },
+            isDone = { f.done },
+            stores = listOf(object : DeviceStorageMigration.Store {
+                override val name = "prefs"
+                override fun hasSource() = true
+                override fun copy() = throw IllegalStateException("boom")
+            }),
+            markDone = { f.done = true },
+        )
+        assertEquals(Result.FAILED, m.run())
         assertFalse(f.done)
     }
 
@@ -91,14 +148,14 @@ class DeviceStorageMigrationTest {
     fun missingSourcesAreTolerated() {
         val f = Fake(prefsExist = false, dbExist = false)
         assertEquals(Result.DONE, f.migration().run())
-        assertEquals(listOf("scrub", "flag"), f.calls)
+        assertEquals(listOf("flag"), f.calls)
     }
 
     @Test
     fun missingDatabaseOnlyIsTolerated() {
         val f = Fake(dbExist = false)
         assertEquals(Result.DONE, f.migration().run())
-        assertEquals(listOf("prefs", "scrub", "flag"), f.calls)
+        assertEquals(listOf("prefs", "flag"), f.calls)
     }
 
     @Test

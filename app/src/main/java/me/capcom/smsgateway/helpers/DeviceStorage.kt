@@ -1,10 +1,18 @@
 package me.capcom.smsgateway.helpers
 
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.os.Build
-import androidx.core.content.edit
+import android.util.Log
 import androidx.core.os.UserManagerCompat
+import me.capcom.smsgateway.receivers.BootReceiver
 import java.io.File
+import java.io.IOException
+import kotlin.system.exitProcess
 
 /**
  * CARD-21: device-protected (DE) storage for what the phone needs before the
@@ -13,19 +21,46 @@ import java.io.File
  * Stays in credential-encrypted (CE) storage: `mnaseb-account` (the app session)
  * and WorkManager's own database.
  *
- * The gateway password is never copied to DE (see [RegistrationInfoScrubber]).
+ * The gateway password is never copied to DE (see [PreferencesFileScrubber]).
+ *
+ * ROLLBACK / DOWNGRADE: the migration COPIES. The CE preferences file and the CE database
+ * stay where they were, so a build from before CARD-21 still finds its data there: stale
+ * (everything after the copy lives only in DE) but intact, and it keeps working. Going
+ * forward again does not overwrite DE (the flag stays set), so the newer DE data wins.
+ * The CE copies are only the safety net for that one release; they may be removed by a
+ * LATER release, once no build older than CARD-21 is in use (a cleanup that runs only when
+ * the flag is set and the user is unlocked). Until then they also keep the gateway password
+ * that DE never holds, exactly as before CARD-21.
  */
 object DeviceStorage {
     const val DATABASE_NAME = "gateway"
 
+    private const val TAG = "DeviceStorage"
     private const val FLAG_FILE = "mnaseb_device_storage"
     private const val FLAG_KEY = "migrated_v1"
-    private const val REGISTRATION_INFO_KEY = "gateway.REGISTRATION_INFO"
-    private val REMOVED_KEYS = listOf("localserver.PASSWORD", "localserver.JWT_SECRET")
 
-    /** The context whose files are device-protected (API 24+); the same context below that. */
+    /** Set when the copy failed in this process: the app then runs on the original CE data. */
+    @Volatile
+    private var useCredentialStorage = false
+
+    /** What the migration did at this process start (null before it ran). */
+    @Volatile
+    var lastResult: DeviceStorageMigration.Result? = null
+        private set
+
+    /** Which store failed and with which exception class; never a message, a path or a value. */
+    @Volatile
+    var lastFailure: String? = null
+        private set
+
+    /**
+     * The context whose files are device-protected (API 24+); the same context below that.
+     * Until the migration succeeded (it failed, or it is still waiting for the unlock) the
+     * app keeps using the original credential-encrypted data, so a failed copy never makes
+     * the phone look unlinked.
+     */
     fun deContext(context: Context): Context =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !useCredentialStorage) {
             context.createDeviceProtectedStorageContext()
         } else {
             context
@@ -33,9 +68,18 @@ object DeviceStorage {
 
     fun isUnlocked(context: Context): Boolean = UserManagerCompat.isUserUnlocked(context)
 
+    /** The copy finished (flag set). Before that, DE holds nothing that may be trusted. */
+    fun isMigrated(context: Context): Boolean {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return true
+        return context.createDeviceProtectedStorageContext()
+            .getSharedPreferences(FLAG_FILE, Context.MODE_PRIVATE)
+            .getBoolean(FLAG_KEY, false)
+    }
+
     /**
-     * Moves the default preferences and the database from CE to DE, once, and only
-     * while the user is unlocked. Call it before anything opens either of them.
+     * Copies the default preferences and the database from CE to DE, once, and only while
+     * the user is unlocked. Call it before anything opens either of them (the database must
+     * be closed). Never throws; read [lastResult] and [lastFailure].
      */
     fun migrateOnce(context: Context): DeviceStorageMigration.Result {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) {
@@ -43,31 +87,90 @@ object DeviceStorage {
         }
 
         val ce = context
-        val de = ce.createDeviceProtectedStorageContext()
-        val prefsName = "${ce.packageName}_preferences"
-        val flags = de.getSharedPreferences(FLAG_FILE, Context.MODE_PRIVATE)
+        val result = try {
+            val de = ce.createDeviceProtectedStorageContext()
+            val prefsName = "${ce.packageName}_preferences"
+            val flags = de.getSharedPreferences(FLAG_FILE, Context.MODE_PRIVATE)
 
-        return DeviceStorageMigration(
-            isUnlocked = { isUnlocked(ce) },
-            isDone = { flags.getBoolean(FLAG_KEY, false) },
-            prefsSourceExists = {
-                File(ce.dataDir, "shared_prefs/$prefsName.xml").exists()
-            },
-            movePrefs = { de.moveSharedPreferencesFrom(ce, prefsName) },
-            scrubPassword = {
-                val prefs = de.getSharedPreferences(prefsName, Context.MODE_PRIVATE)
-                val scrubbed = RegistrationInfoScrubber.scrub(
-                    prefs.getString(REGISTRATION_INFO_KEY, null)
-                )
-                prefs.edit(commit = true) {
-                    if (scrubbed != null) putString(REGISTRATION_INFO_KEY, scrubbed)
-                    // Mnaseb never runs the local server; these are regenerated if ever needed.
-                    REMOVED_KEYS.forEach { remove(it) }
+            val migration = DeviceStorageMigration(
+                isUnlocked = { isUnlocked(ce) },
+                isDone = { flags.getBoolean(FLAG_KEY, false) },
+                stores = listOf(
+                    DeviceStorageStores.preferences(
+                        File(ce.dataDir, "shared_prefs"),
+                        File(de.dataDir, "shared_prefs"),
+                        prefsName,
+                    ),
+                    DeviceStorageStores.database(
+                        ce.getDatabasePath(DATABASE_NAME).parentFile!!,
+                        de.getDatabasePath(DATABASE_NAME).parentFile!!,
+                        DATABASE_NAME,
+                    ),
+                ),
+                // LAST: after every store was copied
+                markDone = {
+                    if (!flags.edit().putBoolean(FLAG_KEY, true).commit()) {
+                        throw IOException("the flag was not written")
+                    }
+                },
+            )
+            migration.run().also { lastFailure = migration.failure }
+        } catch (e: Throwable) {
+            lastFailure = "setup: ${e.javaClass.simpleName}"
+            DeviceStorageMigration.Result.FAILED
+        }
+
+        lastResult = result
+        useCredentialStorage = result == DeviceStorageMigration.Result.FAILED
+        if (result == DeviceStorageMigration.Result.FAILED) {
+            Log.e(TAG, "storage copy failed ($lastFailure); using the original storage, retry at the next start")
+        }
+        return result
+    }
+
+    /**
+     * The process started while locked, so the copy was deferred. At the unlock this process
+     * restarts itself, and the next process runs the copy in `attachBaseContext`, before any
+     * database is open. (An alarm brings the boot receiver back, which does the full start.)
+     */
+    fun restartAtUnlock(context: Context) {
+        val app = context.applicationContext
+        app.registerReceiver(object : BroadcastReceiver() {
+            override fun onReceive(c: Context, intent: Intent) {
+                try {
+                    val relaunch = PendingIntent.getBroadcast(
+                        app,
+                        0,
+                        Intent(Intent.ACTION_BOOT_COMPLETED).setClass(app, BootReceiver::class.java),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+                    )
+                    (app.getSystemService(Context.ALARM_SERVICE) as AlarmManager)
+                        .set(AlarmManager.RTC, System.currentTimeMillis() + 1_500L, relaunch)
+                } catch (e: Throwable) {
+                    Log.w(TAG, "no relaunch alarm: ${e.javaClass.simpleName}")
                 }
-            },
-            dbSourceExists = { ce.getDatabasePath(DATABASE_NAME).exists() },
-            moveDb = { de.moveDatabaseFrom(ce, DATABASE_NAME) },
-            markDone = { flags.edit(commit = true) { putBoolean(FLAG_KEY, true) } },
-        ).run()
+                Log.d(TAG, "unlocked: restarting to run the deferred storage copy")
+                exitProcess(0)
+            }
+        }, IntentFilter("android.intent.action.USER_UNLOCKED"))
+    }
+}
+
+/** What `App` does after the migration ran at this process start. Pure. */
+object MigrationFollowUp {
+    enum class Action {
+        NONE,
+
+        /** The copy failed: say so (log), keep running on the original data. */
+        REPORT_FAILURE,
+
+        /** The process started locked: restart at the unlock so the copy runs in a fresh process. */
+        RESTART_AT_UNLOCK,
+    }
+
+    fun of(result: DeviceStorageMigration.Result?): Action = when (result) {
+        DeviceStorageMigration.Result.FAILED -> Action.REPORT_FAILURE
+        DeviceStorageMigration.Result.SKIPPED_LOCKED -> Action.RESTART_AT_UNLOCK
+        else -> Action.NONE
     }
 }

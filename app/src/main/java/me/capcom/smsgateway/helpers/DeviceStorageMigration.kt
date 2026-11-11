@@ -4,41 +4,64 @@ import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 
 /**
- * CARD-21: the one-time move of the app's data from credential-encrypted (CE)
- * storage to device-protected (DE) storage, so the phone can serve before the
- * first unlock after a reboot.
+ * CARD-21: the one-time copy of the app's data from credential-encrypted (CE) storage to
+ * device-protected (DE) storage, so the phone can serve before the first unlock after a reboot.
  *
- * Pure logic: every Android call is injected, so the rules are unit-tested on the JVM.
+ * Pure logic: every Android and file call is injected, so the rules are unit-tested on the JVM.
  *
  * Rules:
- *  - never while the user is locked (CE is unreadable; nothing is changed);
- *  - runs once: after a full success a flag is written and later calls do nothing;
- *  - order is preferences, then password scrub, then database; the flag is written
- *    only after all of them succeeded, so a failure is retried on the next start;
- *  - a missing source (fresh install, or only one of the two ever existed) is not a failure.
+ *  - never while the user is locked (CE is unreadable; nothing is changed). The process that
+ *    started locked does not migrate; the next unlocked start does (see `App`);
+ *  - the flag is the only authority: when it is set, nothing is copied again, so DE data that
+ *    is newer than CE is never overwritten; when it is absent, DE is not authoritative and is
+ *    (re)built from CE;
+ *  - it COPIES: the CE originals stay (rollback, see [DeviceStorage]);
+ *  - each store is copied as a set (see [AtomicFileSet]) in this order, and the flag is written
+ *    LAST, only after every store succeeded; a failure is retried from scratch on the next start;
+ *  - a missing store (fresh install, or only one of the two ever existed) is not a failure.
+ *
+ * The caller must run it while the database is closed (before Koin and Room start).
  */
 class DeviceStorageMigration(
     private val isUnlocked: () -> Boolean,
     private val isDone: () -> Boolean,
-    private val prefsSourceExists: () -> Boolean,
-    private val movePrefs: () -> Boolean,
-    private val scrubPassword: () -> Unit,
-    private val dbSourceExists: () -> Boolean,
-    private val moveDb: () -> Boolean,
+    private val stores: List<Store>,
     private val markDone: () -> Unit,
 ) {
+    /** One store: the files that belong together. [copy] throws on any failure. */
+    interface Store {
+        /** Short, content-free name used in the failure report. */
+        val name: String
+
+        fun hasSource(): Boolean
+
+        fun copy()
+    }
+
     enum class Result { SKIPPED_LOCKED, ALREADY_DONE, DONE, FAILED }
 
+    /** After [Result.FAILED]: which store and which exception class (never a message or a path). */
+    var failure: String? = null
+        private set
+
     fun run(): Result {
+        failure = null
         if (!isUnlocked()) return Result.SKIPPED_LOCKED
         if (isDone()) return Result.ALREADY_DONE
 
+        for (store in stores) {
+            try {
+                if (store.hasSource()) store.copy()
+            } catch (e: Exception) {
+                failure = "${store.name}: ${e.javaClass.simpleName}"
+                return Result.FAILED
+            }
+        }
+
         try {
-            if (prefsSourceExists() && !movePrefs()) return Result.FAILED
-            scrubPassword()
-            if (dbSourceExists() && !moveDb()) return Result.FAILED
             markDone()
         } catch (e: Exception) {
+            failure = "flag: ${e.javaClass.simpleName}"
             return Result.FAILED
         }
         return Result.DONE
