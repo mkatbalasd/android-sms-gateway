@@ -48,6 +48,14 @@
             android:text="@string/home_start_service"
             android:visibility="gone" />
 
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonHomePause"
+            style="?attr/materialButtonOutlinedStyle"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/home_pause"
+            android:visibility="gone" />
+
         <TextView
             android:id="@+id/textHomeSession"
             android:layout_width="match_parent"

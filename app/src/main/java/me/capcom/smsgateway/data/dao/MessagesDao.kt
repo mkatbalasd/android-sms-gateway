@@ -15,6 +15,7 @@ import me.capcom.smsgateway.data.entities.MessagesTotals
 import me.capcom.smsgateway.data.entities.RecipientState
 import me.capcom.smsgateway.domain.EntitySource
 import me.capcom.smsgateway.domain.ProcessingState
+import me.capcom.smsgateway.modules.account.PendingStamp
 import java.util.Date
 
 @Dao
@@ -60,6 +61,10 @@ interface MessagesDao {
     @Transaction
     @Query("SELECT *, `rowid` FROM message WHERE state = 'Pending' AND (scheduleAt IS NULL OR scheduleAt <= :now) ORDER BY priority DESC, createdAt DESC LIMIT 1")
     fun getPendingLifo(now: Date): MessageWithRecipients?
+
+    /** V2-L23: every pending message with its creation time, for the stale sweep after a pause. */
+    @Query("SELECT id, createdAt FROM message WHERE state = 'Pending'")
+    suspend fun selectPendingStamps(): List<PendingStamp>
 
     @Query("SELECT strftime('%s', MIN(COALESCE(`scheduleAt`, '1970-01-01T00:00:00.000Z'))) * 1000 FROM Message WHERE state = 'Pending'")
     fun nextScheduledTime(): Long?

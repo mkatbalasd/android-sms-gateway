@@ -32,6 +32,9 @@ class OrchestratorService(
         if (autostart && !settings.autostart) {
             return
         }
+        // A paused phone (V2-L23) starts through here too (boot, app start): the pull worker,
+        // the live stream and the send worker refuse to run while it is paused (PauseGate),
+        // and everything that only reports keeps running.
 
         logsSvc.start(context)
         messagesSvc.start(context)
@@ -67,6 +70,16 @@ class OrchestratorService(
             WebHookEvent.AppStarted,
             AppStartedPayload(simCards)
         )
+    }
+
+    /**
+     * V2-L23: «إيقاف مؤقت». Stops only the pulling and the sending of messages. The event
+     * receiver, the state reports, the inbox and the receivers keep running: state events
+     * have no replay, so a stopped receiver would lose delivery reports and failures.
+     */
+    fun pause(context: Context) {
+        gatewaySvc.pausePulling(context)
+        messagesSvc.pauseSending(context)
     }
 
     fun stop(context: Context) {

@@ -17,6 +17,12 @@ interface AppClient {
     suspend fun keepAlive(checklist: KeepAliveChecklist)
     suspend fun unlink(password: String)
 
+    /** V2-L23: tells the platform this phone is paused; the caller stops the services only after it returns. */
+    suspend fun pauseDevice()
+
+    /** V2-L23: tells the platform this phone is back. */
+    suspend fun resumeDevice()
+
     /** Step 1 of the re-attach: a nonce encrypted to this phone's E2E key. */
     suspend fun reattachChallenge(externalDeviceId: String): ReattachChallenge
 
@@ -67,6 +73,14 @@ class AppRepository(
 
     override suspend fun unlink(password: String) {
         account.withSession { api.unlink(it, password) }
+    }
+
+    override suspend fun pauseDevice() {
+        account.withSession { api.pauseDevice(it) }
+    }
+
+    override suspend fun resumeDevice() {
+        account.withSession { api.resumeDevice(it) }
     }
 
     override suspend fun reattachChallenge(externalDeviceId: String): ReattachChallenge =
