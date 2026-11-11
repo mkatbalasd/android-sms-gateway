@@ -40,9 +40,11 @@ internal class PauseGatesTest {
     }
 
     @Test
-    fun withoutAStoreTheGateIsOpen() {
-        // No Koin in a JVM test: the default provider fails open, never closed.
-        assertFalse(PauseGate.defaultProvider())
+    fun withoutAStoreTheGateIsClosed() {
+        // CARD-21 round 7 (reverses the V2-L23 "fails open" rule, which let a paused phone send
+        // before the first unlock): no Koin in a JVM test means no readable store, so the
+        // default provider fails CLOSED.
+        assertTrue(PauseGate.defaultProvider())
     }
 
     // endregion

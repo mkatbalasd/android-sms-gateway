@@ -16,6 +16,7 @@ import me.capcom.smsgateway.ui.dialogs.KeepAliveGuideDialogFragment
 class AndroidLocalCleanup(
     context: Context,
     private val accountSettings: AccountSettings,
+    private val pauseStore: DevicePauseStore,
     private val gatewaySettings: GatewaySettings,
     private val settingsHelper: SettingsHelper,
     private val orchestrator: OrchestratorService,
@@ -50,6 +51,8 @@ class AndroidLocalCleanup(
         gatewaySettings.clearContact()
         settingsHelper.autostart = false
         accountSettings.reset()
+        // CARD-21 round 7: the pause state moved to device-protected storage; it goes with the account.
+        pauseStore.reset()
         KeepAliveGuideDialogFragment.forget(appContext)
 
         // CARD-21: what the old link left in device-protected storage must not reach the next

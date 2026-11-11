@@ -297,6 +297,9 @@ class MessagesService(
             var previousPriority = Message.PRIORITY_MIN
 
             while (true) {
+                // CARD-21 round 7: a pause (or an unreadable pause state) that starts while
+                // the loop runs stops it before the next message; it resumes with the resume.
+                if (me.capcom.smsgateway.modules.account.PauseGate.isPaused()) return
                 val message = messages.getPending(settings.processingOrder) ?: return
                 // CARD-21: an MMS needs credential-encrypted files; it waits for the unlock
                 // (the run stops here, the full start after the unlock sends it).

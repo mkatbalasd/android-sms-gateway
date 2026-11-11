@@ -16,7 +16,10 @@ import java.util.Date
  * - [sendState]: `SendStateWorker`;
  * - [drainWebhooks]: `WebhookQueueProcessorWorker` (signed with the device-protected signing key).
  *
- * Nothing here reads the account store.
+ * Nothing here reads the account store. The pause is read from the device-protected
+ * [me.capcom.smsgateway.modules.account.DevicePauseStore] (through `PauseGate`, which fails
+ * closed): a pull ([GatewayService.getNewMessages], then `enqueueUnlessHeld`) and a send
+ * both refuse while paused or while the pause state cannot be read.
  */
 class LockedRunner(
     private val context: Context,
@@ -29,6 +32,8 @@ class LockedRunner(
     }
 
     override suspend fun sendPending() {
+        // The body of SendMessagesWorker skips this check on its own; here it is the gate.
+        if (me.capcom.smsgateway.modules.account.PauseGate.isPaused()) return
         messagesService.sendPendingMessages()
     }
 

@@ -25,12 +25,18 @@ val accountModule = module {
         )
     }
     single<AppClient> { AppRepository(get<AppBackend>(), get<AccountRepository>()) }
+    // V2-L23 + CARD-21 round 7: the pause state lives in device-protected storage (readable
+    // before the first unlock). AccountSettings is only the source of the one-time copy,
+    // asked for lazily and only while unlocked.
+    single { DevicePauseStore.create(get<Context>()) { get<AccountSettings>() } }
+    single<PauseStore> { get<DevicePauseStore>() }
     // V2-L23: pause and resume of the phone, and the sweep of messages that waited too long.
-    single { StaleSweep(get<PendingStore>(), get<AccountSettings>(), get<StateReporter>()) }
+    single { StaleSweep(get<PendingStore>(), get<PauseStore>(), get<StateReporter>()) }
     factory<LocalCleanup> {
         AndroidLocalCleanup(
             get<Context>(),
             get<AccountSettings>(),
+            get<DevicePauseStore>(),
             get(),
             get(),
             get(),

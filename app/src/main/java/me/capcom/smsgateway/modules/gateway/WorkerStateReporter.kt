@@ -1,15 +1,15 @@
 package me.capcom.smsgateway.modules.gateway
 
-import android.content.Context
 import me.capcom.smsgateway.modules.account.StateReporter
-import me.capcom.smsgateway.modules.gateway.workers.SendStateWorker
 
 /**
- * V2-L23: reports a local message state through the same durable WorkManager job as every
- * other state report (retries, network constraint), whatever the pause state is.
+ * V2-L23 / CARD-21 round 7: reports a local message state through [WorkScheduler.sendState],
+ * the one door of the pipeline: a durable WorkManager job (retries, network constraint)
+ * once the user is unlocked, the in-process runner before the first unlock (WorkManager
+ * cannot run then). Whatever the pause state is.
  */
-class WorkerStateReporter(private val context: Context) : StateReporter {
+class WorkerStateReporter(private val scheduler: WorkScheduler) : StateReporter {
     override fun report(messageId: String) {
-        SendStateWorker.start(context, messageId)
+        scheduler.sendState(messageId)
     }
 }
