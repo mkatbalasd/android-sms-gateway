@@ -32,6 +32,7 @@ import me.capcom.smsgateway.modules.account.KeepAliveChecklist
 import me.capcom.smsgateway.modules.account.IsoTime
 import me.capcom.smsgateway.modules.account.PauseController
 import me.capcom.smsgateway.modules.account.PauseHold
+import me.capcom.smsgateway.modules.account.PauseStore
 import me.capcom.smsgateway.modules.account.ServiceSwitch
 import me.capcom.smsgateway.modules.account.StaleSweep
 import me.capcom.smsgateway.modules.gateway.GatewayService
@@ -54,6 +55,7 @@ class HomeV2Fragment : Fragment() {
 
     private val client: AppClient by inject()
     private val accountSettings: AccountSettings by inject()
+    private val pauseStore: PauseStore by inject()
     private val settingsHelper: SettingsHelper by inject()
     private val gatewaySvc: GatewayService by inject()
     private val orchestratorSvc: OrchestratorService by inject()
@@ -62,7 +64,7 @@ class HomeV2Fragment : Fragment() {
     private val pauseController by lazy {
         val appContext = requireContext().applicationContext
         PauseController(
-            client, accountSettings,
+            client, pauseStore,
             object : ServiceSwitch {
                 // A pause stops only pulling and sending; the full start is the legacy one.
                 override fun pause() = orchestratorSvc.pause(appContext)
@@ -388,7 +390,7 @@ class HomeV2Fragment : Fragment() {
 
     //region Actions
 
-    private fun isPausedNow(): Boolean = HomeStatus.isPaused(accountSettings.isPaused, home)
+    private fun isPausedNow(): Boolean = HomeStatus.isPaused(pauseStore.isPaused, home)
 
     /**
      * Keeps the platform's hold limit, and takes over a pause the platform knows and this
@@ -396,7 +398,7 @@ class HomeV2Fragment : Fragment() {
      * «متوقف مؤقتًا» and offers «استئناف».
      */
     private fun applyPauseFrom(data: AppHome, requestedAtMs: Long) {
-        data.pauseHoldMaxMin?.takeIf { it > 0 }?.let { accountSettings.holdMaxMin = it }
+        data.pauseHoldMaxMin?.takeIf { it > 0 }?.let { pauseStore.holdMaxMin = it }
         if (pauseBusy) return
         pauseController.restore(
             serverPaused = data.paused,
@@ -413,7 +415,7 @@ class HomeV2Fragment : Fragment() {
             .setMessage(
                 getString(
                     R.string.home_pause_confirm_message,
-                    PauseHold.holdMaxMin(accountSettings.holdMaxMin)
+                    PauseHold.holdMaxMin(pauseStore.holdMaxMin)
                 )
             )
             .setPositiveButton(R.string.home_pause_confirm_yes) { _, _ -> pauseDevice() }

@@ -14,11 +14,7 @@ import me.capcom.smsgateway.modules.gateway.events.MessageEnqueuedEvent
 import me.capcom.smsgateway.modules.gateway.events.SettingsUpdatedEvent
 import me.capcom.smsgateway.modules.gateway.events.WebhooksUpdatedEvent
 import me.capcom.smsgateway.modules.gateway.services.SSEForegroundService
-import me.capcom.smsgateway.modules.gateway.workers.PullMessagesWorker
 import me.capcom.smsgateway.modules.gateway.workers.RegistrationWorker
-import me.capcom.smsgateway.modules.gateway.workers.SendStateWorker
-import me.capcom.smsgateway.modules.gateway.workers.SettingsUpdateWorker
-import me.capcom.smsgateway.modules.gateway.workers.WebhooksUpdateWorker
 import me.capcom.smsgateway.modules.messages.MessagesService
 import me.capcom.smsgateway.modules.messages.events.MessageStateChangedEvent
 import me.capcom.smsgateway.modules.ping.events.PingEvent
@@ -38,7 +34,7 @@ class EventsReceiver : EventsReceiver() {
 
                         if (!settings.enabled) return@collect
 
-                        PullMessagesWorker.start(get())
+                        get<WorkScheduler>().pullMessages()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -59,7 +55,7 @@ class EventsReceiver : EventsReceiver() {
 
                         if (event.source !in allowedSources) return@collect
 
-                        SendStateWorker.start(get(), event.id)
+                        get<WorkScheduler>().sendState(event.id)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -78,7 +74,7 @@ class EventsReceiver : EventsReceiver() {
 
                         if (!settings.enabled) return@collect
 
-                        PullMessagesWorker.start(get())
+                        get<WorkScheduler>().pullMessages()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -97,7 +93,7 @@ class EventsReceiver : EventsReceiver() {
 
                         if (!settings.enabled) return@collect
 
-                        WebhooksUpdateWorker.start(get())
+                        get<WorkScheduler>().updateWebhooks()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {
@@ -116,7 +112,7 @@ class EventsReceiver : EventsReceiver() {
 
                         if (!settings.enabled) return@collect
 
-                        SettingsUpdateWorker.start(get())
+                        get<WorkScheduler>().updateSettings()
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

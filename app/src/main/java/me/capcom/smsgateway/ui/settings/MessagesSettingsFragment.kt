@@ -31,6 +31,7 @@ class MessagesSettingsFragment : BasePreferenceFragment() {
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.setStorageDeviceProtected() // CARD-21
         setPreferencesFromResource(R.xml.messages_preferences, rootKey)
     }
 

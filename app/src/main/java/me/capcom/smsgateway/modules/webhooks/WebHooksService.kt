@@ -39,6 +39,11 @@ class WebHooksService(
         WebhookQueueProcessorWorker.start(context, webhooksSettings.internetRequired)
     }
 
+    /** CARD-21: before the first unlock only the events collector runs; no WorkManager. */
+    fun startLocked() {
+        eventsReceiver.start()
+    }
+
     fun stop(context: Context) {
         WebhookQueueProcessorWorker.stop(context)
         ReviewWebhooksWorker.stop(context)

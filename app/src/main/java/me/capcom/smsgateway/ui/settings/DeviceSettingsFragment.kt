@@ -18,6 +18,7 @@ class DeviceSettingsFragment : BasePreferenceFragment() {
     private val deviceService: DeviceService by inject()
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
+        preferenceManager.setStorageDeviceProtected() // CARD-21
         setPreferencesFromResource(R.xml.device_preferences, null)
     }
 

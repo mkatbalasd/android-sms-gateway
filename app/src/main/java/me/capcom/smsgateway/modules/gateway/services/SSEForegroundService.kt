@@ -14,8 +14,15 @@ import me.capcom.smsgateway.modules.account.PauseGate
 import me.capcom.smsgateway.modules.connection.ConnectionService
 import me.capcom.smsgateway.modules.events.ExternalEvent
 import me.capcom.smsgateway.modules.events.ExternalEventType
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import me.capcom.smsgateway.modules.gateway.GatewayService
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
-import me.capcom.smsgateway.modules.gateway.workers.PullMessagesWorker
+import me.capcom.smsgateway.modules.gateway.Heartbeat
+import me.capcom.smsgateway.modules.ping.PingSettings
+import me.capcom.smsgateway.modules.gateway.WorkScheduler
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.notifications.NotificationsService
@@ -24,6 +31,7 @@ import org.koin.android.ext.android.inject
 
 class SSEForegroundService : Service() {
     private val settings: GatewaySettings by inject()
+    private val scheduler: WorkScheduler by inject()
 
     private val eventsRouter by inject<EventsRouter>()
 
@@ -43,6 +51,20 @@ class SSEForegroundService : Service() {
         )
     }
 
+    private val gatewayService: GatewayService by inject()
+    private val pingSettings: PingSettings by inject()
+
+    // CARD-21: an authenticated pull at start and every 300 s (floor 60), independent of
+    // WorkManager, so the platform sees the phone well inside its 15-minute threshold.
+    private val heartbeatScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val heartbeat by lazy {
+        Heartbeat(
+            heartbeatScope,
+            configuredSeconds = { pingSettings.intervalSeconds },
+            beat = { gatewayService.getNewMessages(this@SSEForegroundService) },
+        )
+    }
+
     private val sseManager by lazy {
         SSEManager(
             "${settings.serverUrl}/events",
@@ -57,7 +79,7 @@ class SSEForegroundService : Service() {
                     settings.recordContact()
                     Log.d("SSEForegroundService", "SSE connected, pulling pending messages")
                     try {
-                        PullMessagesWorker.start(this@SSEForegroundService)
+                        scheduler.pullMessages()
                     } catch (e: Throwable) {
                         e.printStackTrace()
                         logsService.insert(
@@ -124,6 +146,7 @@ class SSEForegroundService : Service() {
         startForeground(NotificationsService.NOTIFICATION_ID_REALTIME_EVENTS, notification)
 
         sseManager.connect()
+        heartbeat.start()
 
         return super.onStartCommand(intent, flags, startId)
     }
@@ -149,6 +172,8 @@ class SSEForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        heartbeat.stop()
+        heartbeatScope.cancel()
         sseManager.disconnect()
         connectionService.onNetworkAvailable = null
         if (wifiLock.isHeld) {

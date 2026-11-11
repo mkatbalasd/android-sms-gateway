@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
+import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.modules.settings.KeyValueStorage
 import me.capcom.smsgateway.modules.settings.PreferencesStorage
 import java.io.File
@@ -24,7 +25,17 @@ object AccountStorageFactory {
     private const val PREFIX = "account"
     private const val TAG = "AccountStorage"
 
-    fun create(context: Context): KeyValueStorage {
+    /**
+     * CARD-21: refuses while the user storage is locked (a phone that booted and was not
+     * unlocked yet). The file is credential-encrypted: opening it then fails, and the
+     * "unreadable, start a new one" path below would delete the real file and keep an
+     * in-memory store for the life of the process, so the app would look signed out
+     * after the unlock. Nothing is opened, nothing is deleted.
+     */
+    fun create(context: Context): KeyValueStorage =
+        requireUnlocked({ DeviceStorage.isUnlocked(context) }) { createUnlocked(context) }
+
+    private fun createUnlocked(context: Context): KeyValueStorage {
         val app = context.applicationContext
         val prefs = open(app) ?: run {
             Log.w(TAG, "encrypted store unreadable, starting a new one")
@@ -61,6 +72,15 @@ object AccountStorageFactory {
             // nothing more to do; open() is tried once more and may fall back to memory
         }
     }
+}
+
+/** Thrown when the account store is asked for before the first unlock (CARD-21). */
+class LockedException : IllegalStateException("The account store is not available before the first unlock")
+
+/** Runs [block] only when [isUnlocked] says so; otherwise throws [LockedException] and runs nothing. */
+internal fun <T> requireUnlocked(isUnlocked: () -> Boolean, block: () -> T): T {
+    if (!isUnlocked()) throw LockedException()
+    return block()
 }
 
 /** Keeps values for the life of the process only; the last resort of [AccountStorageFactory]. */

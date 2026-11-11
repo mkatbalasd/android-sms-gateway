@@ -4,7 +4,12 @@ import android.app.Application
 import android.content.Context
 import healthModule
 import me.capcom.smsgateway.data.dbModule
+import me.capcom.smsgateway.helpers.DeviceStorage
 import me.capcom.smsgateway.helpers.LocaleHelper
+import me.capcom.smsgateway.helpers.MigrationFollowUp
+import me.capcom.smsgateway.modules.logs.db.LogEntry
+import me.capcom.smsgateway.modules.orchestrator.LockedMode
+import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.connection.connectionModule
 import me.capcom.smsgateway.modules.device.deviceModule
 import me.capcom.smsgateway.modules.encryption.encryptionModule
@@ -32,11 +37,25 @@ import org.koin.core.context.startKoin
 
 class App: Application() {
     override fun attachBaseContext(base: Context?) {
+        // CARD-21: copy preferences + database to device-protected storage, once, before
+        // anything opens them (the database is closed here). Never runs while the user is
+        // locked; a failure keeps the app on the original data and is reported in onCreate.
+        base?.let { DeviceStorage.migrateOnce(it) }
         super.attachBaseContext(base?.let { LocaleHelper.onAttach(it) })
     }
 
     override fun onCreate() {
         super.onCreate()
+
+        // CARD-21: the copy was skipped because this process started locked, and the user is
+        // unlocked by now (the unlock receiver would never fire). Running on the empty
+        // device-protected storage would look unlinked and let a re-link be overwritten by the
+        // later copy, so restart before anything starts or writes.
+        if (MigrationFollowUp.of(DeviceStorage.lastResult, DeviceStorage.isUnlocked(this))
+            == MigrationFollowUp.Action.RESTART_NOW
+        ) {
+            DeviceStorage.exitAndRelaunch(this)
+        }
 
         startKoin {
             androidLogger()
@@ -61,6 +80,7 @@ class App: Application() {
                 orchestratorModule,
                 deviceModule,
                 me.capcom.smsgateway.modules.account.accountModule,
+                me.capcom.smsgateway.modules.gateway.workSchedulerModule,
             )
         }
 
@@ -79,7 +99,32 @@ class App: Application() {
         // orchestrator starts, so a boot before the UI opens cannot start it.
         get<LocalServerSettings>().enabled = false
 
-        get<OrchestratorService>().start(this, true)
+        // CARD-21: say it when the copy to device-protected storage failed (the app runs on the
+        // original data meanwhile, so it does not look unlinked), and restart at the unlock
+        // when the copy was deferred because this process started locked.
+        when (MigrationFollowUp.of(DeviceStorage.lastResult, DeviceStorage.isUnlocked(this))) {
+            MigrationFollowUp.Action.RESTART_NOW -> Unit // handled first thing in onCreate
+
+            MigrationFollowUp.Action.REPORT_FAILURE -> get<LogsService>().insert(
+                LogEntry.Priority.ERROR,
+                "DeviceStorage",
+                "The copy to device-protected storage failed (${DeviceStorage.lastFailure}); " +
+                        "running on the original storage, it is retried at the next start",
+            )
+
+            MigrationFollowUp.Action.RESTART_AT_UNLOCK -> DeviceStorage.restartAtUnlock(this)
+            MigrationFollowUp.Action.NONE -> Unit
+        }
+
+        // CARD-21: a process started before the first unlock (a direct-boot component: the
+        // boot receiver, the SSE service restarted by the system, or a delivery report) must
+        // not start WorkManager-based work. It starts the locked pipeline instead (idempotent,
+        // whichever entry got here first); the full start runs through the unlock handover.
+        if (DeviceStorage.isUnlocked(this)) {
+            get<OrchestratorService>().start(this, true)
+        } else {
+            LockedMode.start(this)
+        }
     }
 
     val gatewayService: GatewayService by inject()

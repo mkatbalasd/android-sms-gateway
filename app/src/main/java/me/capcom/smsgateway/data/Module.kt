@@ -1,9 +1,11 @@
 package me.capcom.smsgateway.data
 
+import me.capcom.smsgateway.helpers.DeviceStorage
 import org.koin.dsl.module
 
 val dbModule = module {
-    single { AppDatabase.getDatabase(get()) }
+    // CARD-21: the database lives in device-protected storage.
+    single { AppDatabase.getDatabase(DeviceStorage.deContext(get())) }
     single { get<AppDatabase>().messagesDao() }
     single { get<AppDatabase>().incomingMessagesDao() }
     single { get<AppDatabase>().webhooksDao() }

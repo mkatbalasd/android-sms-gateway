@@ -1,6 +1,5 @@
 package me.capcom.smsgateway.modules.gateway
 
-import android.content.Context
 import me.capcom.smsgateway.modules.account.StateReporter
 import me.capcom.smsgateway.modules.gateway.inbox.InboxUploadRepository
 import me.capcom.smsgateway.modules.gateway.inbox.InboxUploadService
@@ -11,7 +10,7 @@ val gatewayModule = module {
     singleOf(::GatewayService)
     singleOf(::InboxUploadRepository)
     singleOf(::InboxUploadService)
-    single<StateReporter> { WorkerStateReporter(get<Context>()) }
+    single<StateReporter> { WorkerStateReporter(get<WorkScheduler>()) }
 }
 
 internal const val MODULE_NAME = "gateway"
