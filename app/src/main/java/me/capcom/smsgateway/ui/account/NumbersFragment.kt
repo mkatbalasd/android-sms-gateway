@@ -31,7 +31,13 @@ class NumbersFragment : Fragment() {
     ) {
         val ctx = context ?: return@registerForActivityResult
         if (AccountPermissions.canSendSms(ctx)) viewModel.verifyTicked()
-        else viewModel.permissionDenied()
+        else {
+            viewModel.permissionDenied()
+            // A row that asks for a number keeps its phase, so say it on the screen too.
+            android.widget.Toast.makeText(
+                ctx, R.string.numbers_status_needs_permission, android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     override fun onCreateView(
