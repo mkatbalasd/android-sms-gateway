@@ -52,7 +52,22 @@ class AndroidLocalCleanup(
         settingsHelper.autostart = false
         accountSettings.reset()
         // CARD-21 round 7: the pause state moved to device-protected storage; it goes with the account.
-        pauseStore.reset()
+        // rev-fork24-2 L3: a failing commit must not abort the rest of the unlink (the secrets,
+        // payload files, CE copy and session password below). The pause file then keeps its
+        // last state (a paused phone stays paused, one Resume recovers it).
+        try {
+            pauseStore.reset()
+        } catch (e: Exception) {
+            // rev-fork28-1 L3: the old copy was just cleared and the DE file keeps its mark
+            // flag, so put the "paused" mark on the old copy directly (a later lost file
+            // then still reads paused).
+            try {
+                accountSettings.pausedAtMs = DevicePauseStore.LEGACY_MARK
+                accountSettings.resumedAtMs = null
+            } catch (e2: Exception) {
+                // continue
+            }
+        }
         KeepAliveGuideDialogFragment.forget(appContext)
 
         // CARD-21: what the old link left in device-protected storage must not reach the next

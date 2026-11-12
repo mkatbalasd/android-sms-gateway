@@ -68,8 +68,10 @@ class DevicePauseStore(
             throw PauseStateUnreadableException("pause state is not available before the first unlock")
         }
         val old = legacy()
-        // Take the values first, then mark the old copy BEFORE the copy is committed: a kill
-        // in between only repeats the copy.
+        // Take the values first, then mark the old copy BEFORE the copy is committed. A kill
+        // in between: if the mark was flushed and the copy was not, the next read copies the
+        // MARKED values, so the phone reads paused and logs "the pause file was lost" (fails
+        // closed; one Resume recovers it). It never reads not-paused from a stale copy.
         val paused = old.pausedAtMs
         val resumed = old.resumedAtMs
         val hold = old.holdMaxMin
@@ -97,9 +99,16 @@ class DevicePauseStore(
         }
         true
     } catch (e: Exception) {
-        report("the old pause copy could not be marked: ${e.javaClass.simpleName}")
+        // rev-fork24-2 L5: once per process; a mark that keeps failing (a Keystore fault) is
+        // retried on every unlocked read and must not write one WARN row per read.
+        if (!markFailReported) {
+            markFailReported = true
+            report("the old pause copy could not be marked: ${e.javaClass.simpleName}")
+        }
         false
     }
+
+    private var markFailReported = false
 
     private var corruptReported = false
 

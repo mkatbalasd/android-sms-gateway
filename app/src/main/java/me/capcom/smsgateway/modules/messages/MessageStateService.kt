@@ -144,6 +144,30 @@ open class MessageStateService(
     }
 
     /**
+     * rev-fork28-1: fails the message only while EVERY recipient is still Pending, decided
+     * under the per-message lock. A message that left Pending since the caller's snapshot
+     * (the send loop moved it on) is left alone: it must not be sent AND failed (refunded).
+     * @return whether the message was failed.
+     */
+    suspend fun failIfPending(id: String, error: String? = null): Boolean =
+        lock.withLock(lockKey(id)) {
+            val row = dao.get(id) ?: return@withLock false
+            val recipients = row.recipients
+            if (recipients.isEmpty() || recipients.any { it.state != ProcessingState.Pending }) {
+                return@withLock false
+            }
+            dao.updateRecipientsAndMessageState(id, ProcessingState.Failed, error, ProcessingState.Failed)
+            val after = dao.get(id) ?: return@withLock true
+            emit(
+                row = after,
+                phoneNumbers = after.recipients.map { it.phoneNumber }.toSet(),
+                target = ProcessingState.Failed,
+                error = error
+            )
+            true
+        }
+
+    /**
      * Reconciles the stored message state from the derived recipient state
      * (exact current getMessage branches: Processed -> setMessageProcessed style
      * with processedAt; else guarded update). Every sync write is gated by the
