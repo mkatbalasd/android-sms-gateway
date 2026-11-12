@@ -133,4 +133,39 @@ internal class ProofSendPermissionTest {
         assertEquals(RowPhase.NEEDS_PERMISSION, marked[1].phase)
         assertTrue(marked[0].asksForNumber)
     }
+
+    // V2-L25 (rev-fork21-2 L9): a denied prompt must change something visible on the screen,
+    // also when every ticked row is NEEDS_NUMBER (its row keeps its phase).
+    @Test
+    fun aDeniedPromptShowsTheMessageOnTheScreenWhateverThePhaseOfTheRows() {
+        val source = me.capcom.smsgateway.modules.gateway.PauseGateSources.read("ui/account/NumbersFragment.kt")
+        val start = source.indexOf("viewModel.permissionDenied()")
+        assertTrue(start >= 0)
+        val after = source.substring(start, minOf(source.length, start + 300))
+        assertTrue(after.contains("numbers_status_needs_permission"))
+    }
+
+    // V2-L25 (rev-fork21-2 L10): after a revoke the kept text belongs to the number that was
+    // typed at the start; an edited number must not be ignored (and must not get that text).
+    @Test
+    fun anEditedNumberAfterARevokeDoesNotSendTheKeptTextToTheOriginalNumber() = runBlocking {
+        val client = FakeAppClient()
+        client.verifyAnswer = { LineVerifyStart("LOOPBACK", "+967700000999", "MNASEB 7K2Q-SECRET", 600) }
+        val sender = Sender()
+        val answers = ArrayDeque(listOf(true, false, true, true))
+        val v = verifier(client, sender) { answers.removeFirst() }
+        val asking = row.copy(phase = RowPhase.NEEDS_NUMBER, typed = "+967700000999")
+
+        val first = v.verify(asking)
+        assertEquals(0, sender.calls.size)
+
+        // the keeper edits the number and taps again
+        client.verifyAnswer = { throw me.capcom.smsgateway.modules.account.AccountException(
+            me.capcom.smsgateway.modules.account.AccountError("LINE_PROOF_OPEN", 409)) }
+        val second = v.verify(first.copy(typed = "+967700000888"))
+
+        assertEquals("nothing is sent to the original number", 0, sender.calls.size)
+        assertEquals(RowPhase.OPEN_PROOF, second.phase)
+        assertEquals(2, client.verifyCalls.size)
+    }
 }

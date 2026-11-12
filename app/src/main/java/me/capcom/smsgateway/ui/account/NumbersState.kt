@@ -155,7 +155,14 @@ class NumbersVerifier(
      * the platform's token is still valid (it blocks a new start until it expires); never
      * stored, logged or shown.
      */
-    private class Unsent(val method: String, val to: String, val text: String, val validUntilMs: Long) {
+    private class Unsent(
+        val method: String,
+        val to: String,
+        val text: String,
+        val validUntilMs: Long,
+        /** The number typed when the check was started (LOOPBACK sends to it). */
+        val typed: String,
+    ) {
         override fun toString() = "Unsent(redacted)"
     }
 
@@ -179,7 +186,12 @@ class NumbersVerifier(
         // The last tap's SMS did not leave and its token is still open: send that same text again.
         val kept = unsent[row.slot]
         if (kept != null) {
-            if (nowMs() < kept.validUntilMs) return send(row, kept, onPhase)
+            // A LOOPBACK text goes to the number typed at the start: if the keeper edited it,
+            // that text must not be sent (it would go to the old number and the edit would be
+            // ignored). Drop it and ask the platform again; it answers LINE_PROOF_OPEN until
+            // the old token expires, which the row shows.
+            val edited = kept.method == LineVerifyStart.METHOD_LOOPBACK && kept.typed != row.typed
+            if (nowMs() < kept.validUntilMs && !edited) return send(row, kept, onPhase)
             unsent.remove(row.slot)
         }
 
@@ -210,7 +222,7 @@ class NumbersVerifier(
             return row.copy(phase = RowPhase.FAILED, errorCode = "BAD_RESPONSE")
         }
         val ttlMs = (start.expiresIn ?: PROOF_TTL_MINUTES * 60L).coerceIn(1L, 3_600L) * 1000L
-        return send(row, Unsent(method!!, to!!, text, nowMs() + ttlMs), onPhase)
+        return send(row, Unsent(method!!, to!!, text, nowMs() + ttlMs, row.typed), onPhase)
     }
 
     private suspend fun send(row: NumberRow, proof: Unsent, onPhase: (RowPhase) -> Unit): NumberRow {
