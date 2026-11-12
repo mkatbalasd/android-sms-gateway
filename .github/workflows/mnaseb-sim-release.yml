@@ -38,7 +38,7 @@ jobs:
     outputs:
       signed: ${{ steps.sign.outputs.signed }}
       version: ${{ steps.version.outputs.version }}
-      cert: ${{ steps.cert.outputs.cert_sha256 }}
+      cert: ${{ steps.cert_gate.outputs.cert_sha256 }}
       continuity: ${{ steps.cert.outputs.continuity }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -148,27 +148,43 @@ jobs:
       # The fingerprint the download page shows (and B-57 registers), and whether the
       # certificate is the one of the previous release: a different certificate means an
       # installed older version cannot be upgraded and must be uninstalled first.
-      # Informational: this step never fails the build.
-      - name: Certificate fingerprint and continuity
+      # HARD GATE (V2-L27, Tier T2): the signing certificate of the built, signed APK must
+      # equal the pinned Mnaseb certificate. A mismatch, or a fingerprint that cannot be
+      # extracted, fails this job; it runs before Upload APK and the release job needs
+      # this job, so nothing is published. The pin is a public constant, not a secret.
+      - name: Pinned certificate gate
+        id: cert_gate
+        if: github.ref_type == 'tag' && steps.sign.outputs.signed == 'true'
+        env:
+          PINNED_CERT_SHA256: "05f3a9e7b96c8306ce46c3312379d0713f5f92aca9b1a9f62492fab3a286f3e2" # CN=Mnaseb
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          export BUILD_TOOLS
+          APK="$(ls dist/*.apk | head -n 1)"
+          CERT="$(bash .github/scripts/check-pinned-cert.sh "$APK")"
+          test -n "$CERT"
+          echo "cert_sha256=${CERT}" >> "$GITHUB_OUTPUT"
+          {
+            echo "### Signing certificate"
+            echo "SHA-256: \`${CERT}\` (matches the pinned Mnaseb certificate)"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Informational note only (the pinned gate above is the gate): whether the certificate
+      # is the one of the previous release.
+      - name: Certificate continuity
         id: cert
         if: github.ref_type == 'tag' && steps.sign.outputs.signed == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
+          CERT: ${{ steps.cert_gate.outputs.cert_sha256 }}
         run: |
           set -euo pipefail
           BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
           digest_of() {
             "$BUILD_TOOLS/apksigner" verify --print-certs "$1" | grep -m1 'certificate SHA-256 digest' | sed 's/.*: *//'
           }
-          APK="$(ls dist/*.apk | head -n 1)"
-          CERT="$(digest_of "$APK")"
-          test -n "$CERT"
-          echo "cert_sha256=${CERT}" >> "$GITHUB_OUTPUT"
-          {
-            echo "### Signing certificate"
-            echo "SHA-256: \`${CERT}\`"
-          } >> "$GITHUB_STEP_SUMMARY"
 
           STATE="unknown"
           PREV_TAG="$(gh release list --repo "$GITHUB_REPOSITORY" --limit 20 --json tagName --jq '.[].tagName' | grep '^mnaseb-sim-v' | grep -vx "$GITHUB_REF_NAME" | head -n 1 || true)"

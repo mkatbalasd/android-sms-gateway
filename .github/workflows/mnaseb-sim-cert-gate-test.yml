@@ -1,0 +1,35 @@
+name: Mnaseb SIM Cert Gate Test
+
+# Self-test of the pinned signing-certificate gate used by mnaseb-sim-release.yml.
+# No secrets, no Android tools: pure bash.
+
+on:
+  pull_request:
+    branches: [mnaseb-sim]
+    paths:
+      - ".github/scripts/check-pinned-cert*.sh"
+      - ".github/workflows/mnaseb-sim-release.yml"
+      - ".github/workflows/mnaseb-sim-cert-gate-test.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  cert-gate:
+    name: Pinned certificate gate self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Run self-test
+        run: bash .github/scripts/check-pinned-cert-test.sh
+
+      - name: Gate is hard and precedes upload
+        run: |
+          set -euo pipefail
+          f=.github/workflows/mnaseb-sim-release.yml
+          gate=$(grep -n 'id: cert_gate' "$f" | cut -d: -f1)
+          upload=$(grep -n 'name: Upload APK' "$f" | cut -d: -f1)
+          test -n "$gate" && test -n "$upload" && test "$gate" -lt "$upload"
+          # the gate step block (up to the next step) must not contain continue-on-error
+          ! sed -n "${gate},/name: Certificate continuity/p" "$f" | grep -q 'continue-on-error'
