@@ -35,6 +35,8 @@ class DevicePauseStore(
         val resumedAtMs: Long? = null,
         val holdMaxMin: Int? = null,
         val migrated: Boolean? = null,
+        /** The old credential-encrypted copy carries the "paused" mark (see [markLegacy]). */
+        val legacyMarked: Boolean? = null,
     )
 
     @Synchronized
@@ -48,31 +50,58 @@ class DevicePauseStore(
             // makes the resume sweep and the pull drop rule judge a message by its own age.
             return rewriteCorrupt()
         }
-        if (stored?.migrated == true) return stored
+        if (stored?.migrated == true) {
+            if (stored.legacyMarked == true || !isUnlocked()) return stored
+            // Migrated by an earlier build (or reset by an unlink) and the old copy was never
+            // marked: mark it on this unlocked read, so a lost file later fails closed.
+            return try {
+                val marked = stored.copy(legacyMarked = markLegacy(legacy()))
+                if (marked != stored) storage.set(KEY, marked)
+                marked
+            } catch (e: Exception) {
+                stored
+            }
+        }
 
         if (!isUnlocked()) {
             // Not copied yet and the old copy cannot be read: unknown, never "not paused".
             throw PauseStateUnreadableException("pause state is not available before the first unlock")
         }
         val old = legacy()
-        val copied = Stored(old.pausedAtMs, old.resumedAtMs, old.holdMaxMin, migrated = true)
+        // Take the values first, then mark the old copy BEFORE the copy is committed: a kill
+        // in between only repeats the copy.
+        val paused = old.pausedAtMs
+        val resumed = old.resumedAtMs
+        val hold = old.holdMaxMin
+        val lost = paused == LEGACY_MARK && resumed == null
+        val markedOk = markLegacy(old)
+        val copied = Stored(paused, resumed, hold, migrated = true, legacyMarked = markedOk)
         storage.set(KEY, copied)
-        if (old.pausedAtMs == LEGACY_MARK && old.resumedAtMs == null) {
+        if (lost) {
             // V2-L25: the copy was done before and the file is gone now. The old copy was
             // marked paused then, so this reads as paused, not as the stale pre-update value.
             report("the pause file was lost; the state was restored as paused")
-        } else {
-            // Mark the old copy paused: a lost DE file (or a downgrade to a build that reads
-            // these fields) must fail closed, never reopen the gate from a stale value.
-            try {
-                old.pausedAtMs = LEGACY_MARK
-                old.resumedAtMs = null
-            } catch (e: Exception) {
-                report("the old pause copy could not be marked: ${e.javaClass.simpleName}")
-            }
         }
         return copied
     }
+
+    /**
+     * Marks the old credential-encrypted copy as paused (a lost DE file, or a downgrade to a
+     * build that reads these fields, must fail closed, never reopen the gate from a stale
+     * value). Returns whether it is marked.
+     */
+    private fun markLegacy(old: PauseStore): Boolean = try {
+        if (!(old.pausedAtMs == LEGACY_MARK && old.resumedAtMs == null)) {
+            old.pausedAtMs = LEGACY_MARK
+            old.resumedAtMs = null
+        }
+        true
+    } catch (e: Exception) {
+        report("the old pause copy could not be marked: ${e.javaClass.simpleName}")
+        false
+    }
+
+    private var corruptReported = false
 
     private fun rewriteCorrupt(): Stored {
         val clean = Stored(pausedAtMs = 0L, resumedAtMs = null, holdMaxMin = null, migrated = true)
@@ -81,7 +110,10 @@ class DevicePauseStore(
         } catch (e: Exception) {
             // still answer paused for this read
         }
-        report("the pause value was unreadable; the state was reset to paused")
+        if (!corruptReported) {
+            corruptReported = true // once per process: a failing rewrite must not flood the log
+            report("the pause value was unreadable; the state was reset to paused")
+        }
         return clean
     }
 
@@ -121,6 +153,13 @@ class DevicePauseStore(
     @Synchronized
     fun reset() {
         storage.set(KEY, Stored(migrated = true))
+        // The unlink cleared the old copy's mark: put it back now (or on the next unlocked
+        // read), so unlink -> link -> pause -> lost file still reads paused.
+        try {
+            read()
+        } catch (e: Exception) {
+            // locked or unreadable: the next unlocked read marks it
+        }
     }
 
     companion object {

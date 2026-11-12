@@ -126,6 +126,74 @@ internal class DevicePauseStoreCorruptTest {
     }
 
     @Test
+    fun aPhoneMigratedByAnEarlierBuildGetsTheOldCopyMarkedOnTheNextUnlockedRead() {
+        // rc4: DE says migrated, the old copy was never marked and says "not paused"
+        val storage = FakeKeyValueStorage()
+        storage.set("state", DevicePauseStore.Stored(migrated = true))
+        val legacy = Plain()
+        val warnings = mutableListOf<String>()
+        fun open() = DevicePauseStore(storage, { legacy }, isUnlocked = { true }, onRepair = { warnings.add(it) })
+
+        val store = open()
+        assertFalse(store.isPaused)
+        store.pausedAtMs = now
+        assertEquals(DevicePauseStore.LEGACY_MARK, legacy.pausedAtMs)
+
+        // the DE file is lost: it must not reopen the gate from the old copy
+        storage.values.clear()
+        assertTrue(open().isPaused)
+        assertEquals(1, warnings.size)
+    }
+
+    @Test
+    fun unlinkThenRelinkThenPauseThenALostFileStillReadsPaused() {
+        val storage = FakeKeyValueStorage()
+        val legacy = Plain()
+        fun open() = DevicePauseStore(storage, { legacy }, isUnlocked = { true })
+        val first = open()
+        assertFalse(first.isPaused)
+
+        // unlink: the account store clears the old copy, then the pause store resets
+        legacy.pausedAtMs = null
+        legacy.resumedAtMs = null
+        first.reset()
+        assertEquals(DevicePauseStore.LEGACY_MARK, legacy.pausedAtMs)
+
+        // linked again, paused
+        val relinked = open()
+        relinked.pausedAtMs = now
+        storage.values.clear()
+
+        assertTrue(open().isPaused)
+    }
+
+    @Test
+    fun aMarkThatCouldNotBeWrittenIsRetriedOnALaterRead() {
+        val storage = FakeKeyValueStorage()
+        storage.set("state", DevicePauseStore.Stored(migrated = true))
+        val legacy = Plain()
+        var fail = true
+        val flaky = object : PauseStore {
+            override var pausedAtMs: Long?
+                get() = legacy.pausedAtMs
+                set(v) { if (fail) throw IllegalStateException("x") else legacy.pausedAtMs = v }
+            override var resumedAtMs: Long?
+                get() = legacy.resumedAtMs
+                set(v) { legacy.resumedAtMs = v }
+            override var holdMaxMin: Int?
+                get() = legacy.holdMaxMin
+                set(v) { legacy.holdMaxMin = v }
+        }
+        val store = DevicePauseStore(storage, { flaky }, isUnlocked = { true })
+        assertFalse(store.isPaused)
+        assertEquals(null, legacy.pausedAtMs)
+
+        fail = false
+        assertFalse(store.isPaused)
+        assertEquals(DevicePauseStore.LEGACY_MARK, legacy.pausedAtMs)
+    }
+
+    @Test
     fun aFirstCopyIsNotReportedAsARepair() {
         val warnings = mutableListOf<String>()
         val store = DevicePauseStore(FakeKeyValueStorage(), { Plain() }, isUnlocked = { true }, onRepair = { warnings.add(it) })
