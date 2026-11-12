@@ -17,7 +17,7 @@ internal class SweepWhilePausedTest {
         override var holdMaxMin: Int? = null
     }
 
-    private class Queue(var stamps: List<PendingStamp>) : PendingStore {
+    private class Queue(var stamps: List<PendingStamp>) : DelegatingPendingStore() {
         val failed = mutableListOf<Pair<String, String>>()
         override suspend fun pending() = stamps
         override suspend fun fail(id: String, reason: String) {
@@ -118,6 +118,17 @@ internal class SweepWhilePausedTest {
         repeat(5) { store.isPaused }
 
         assertEquals(1, warnings.size)
+    }
+
+    @Test
+    fun whenTheResetFailsTheUnlinkMarksTheOldCopyPaused() {
+        // source scan (AndroidLocalCleanup needs the whole app graph to construct)
+        val source = me.capcom.smsgateway.modules.gateway.PauseGateSources.read("modules/account/AndroidLocalCleanup.kt")
+        val at = source.indexOf("pauseStore.reset()")
+        assertTrue(at >= 0)
+        val catchBlock = source.substring(at, minOf(source.length, at + 700))
+        assertTrue(catchBlock.contains("accountSettings.pausedAtMs = DevicePauseStore.LEGACY_MARK"))
+        assertTrue(catchBlock.contains("accountSettings.resumedAtMs = null"))
     }
 
     @Test

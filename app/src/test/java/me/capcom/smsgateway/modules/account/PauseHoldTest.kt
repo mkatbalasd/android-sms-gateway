@@ -38,7 +38,7 @@ internal class PauseHoldTest {
     private class FakePending(
         var stamps: List<PendingStamp>,
         private val events: MutableList<String>,
-    ) : PendingStore {
+    ) : DelegatingPendingStore() {
         val failed = mutableListOf<Pair<String, String>>()
         override suspend fun pending() = stamps
         override suspend fun fail(id: String, reason: String) {
@@ -248,7 +248,7 @@ internal class PauseHoldTest {
     @Test
     fun oneMessageThatCannotBeFailedDoesNotStopTheRest() = runBlocking {
         val store = FakeStore().apply { pausedAtMs = now - 200 * minute }
-        val failing = object : PendingStore {
+        val failing = object : DelegatingPendingStore() {
             val failed = mutableListOf<String>()
             override suspend fun pending() = listOf(
                 PendingStamp("x", now - 90 * minute),
@@ -367,7 +367,7 @@ internal class PauseHoldTest {
     @Test
     fun aMessageThatCannotBeFailedIsNotReported() = runBlocking {
         val store = FakeStore().apply { pausedAtMs = now - 200 * minute }
-        val failing = object : PendingStore {
+        val failing = object : DelegatingPendingStore() {
             override suspend fun pending() = listOf(PendingStamp("x", now - 90 * minute))
             override suspend fun fail(id: String, reason: String) = throw IllegalStateException("gone")
         }

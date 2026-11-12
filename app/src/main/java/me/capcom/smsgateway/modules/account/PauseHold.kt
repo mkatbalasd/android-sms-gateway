@@ -176,18 +176,15 @@ interface PendingStore {
 
     /**
      * Fails the message only if it is still wholly Pending at the moment of the write
-     * (decided under the per-message lock). False when it moved on. The default is [fail].
+     * (decided under the per-message lock). False when it moved on. No default: a store must say.
      */
-    suspend fun failIfPending(id: String, reason: String): Boolean {
-        fail(id, reason)
-        return true
-    }
+    suspend fun failIfPending(id: String, reason: String): Boolean
 
     /**
      * Runs [block] only while no send is in progress (a message mid-submit is still Pending
-     * and must not be failed); null when it was skipped. The default always runs it.
+     * and must not be failed); null when it was skipped. No default: a store must say.
      */
-    suspend fun <T> whenNotSending(block: suspend () -> T): T? = block()
+    suspend fun <T> whenNotSending(block: suspend () -> T): T?
 }
 
 /** Marks every pending message that was held longer than the limit Failed ("TTL expired"). */

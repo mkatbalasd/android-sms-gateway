@@ -8,7 +8,7 @@ import kotlinx.coroutines.test.runTest
 import me.capcom.smsgateway.domain.ProcessingState
 import me.capcom.smsgateway.modules.account.PauseStore
 import me.capcom.smsgateway.modules.account.PendingStamp
-import me.capcom.smsgateway.modules.account.PendingStore
+import me.capcom.smsgateway.modules.account.DelegatingPendingStore
 import me.capcom.smsgateway.modules.account.StaleSweep
 import me.capcom.smsgateway.modules.account.StateReporter
 import me.capcom.smsgateway.modules.events.EventBus
@@ -57,7 +57,7 @@ internal class PausedSweepRaceTest {
         val service = MessageStateService(dao, EventBus())
         val reports = Reports()
         // the snapshot still lists m1 as Pending, then the send loop moves it on
-        val store = object : PendingStore {
+        val store = object : DelegatingPendingStore() {
             override suspend fun pending(): List<PendingStamp> {
                 val snapshot = listOf(PendingStamp("m1", now - 3 * hourMs))
                 service.transitionRecipient("m1", "+79990000001", ProcessingState.Processed)
@@ -114,14 +114,18 @@ internal class PausedSweepRaceTest {
         runCurrent()
         assertTrue(submitting.isCompleted)
 
-        // the Room snapshot lists m1 as old, but the gate is held: nothing is failed
+        // the snapshot really lists m1 (Pending, old): without the gate the sweep would fail it
+        assertEquals(listOf("m1"), store.pending().map { it.id })
         assertNull(store.whenNotSending { 1 })
         assertEquals(0, sweep.sweepWhilePaused())
         assertEquals(ProcessingState.Pending, dao.storedState("m1"))
         assertTrue(reports.ids.isEmpty())
 
+        // control: the submit is over, the gate is free, the same sweep now ends the message once
         finish.complete(Unit)
         runCurrent()
-        assertEquals(1, store.whenNotSending { 1 })
+        assertEquals(1, sweep.sweepWhilePaused())
+        assertEquals(ProcessingState.Failed, dao.storedState("m1"))
+        assertEquals(listOf("m1"), reports.ids)
     }
 }
