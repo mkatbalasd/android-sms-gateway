@@ -7,12 +7,14 @@ import java.lang.reflect.Type
 class PreferencesStorage(
     private val preferences: SharedPreferences,
     private val prefix: String,
-    serializer: ValueSerializer? = null
+    serializer: ValueSerializer? = null,
+    /** true: write with commit() (synchronous) instead of apply(). */
+    private val synchronous: Boolean = false,
 ): KeyValueStorage {
     private val serializer = serializer ?: ValueSerializer()
 
     override fun <T> set(key: String, value: T) {
-        preferences.edit {
+        preferences.edit(commit = synchronous) {
             if (value == null) {
                 remove("${prefix}.${key}")
                 return@edit
@@ -46,7 +48,7 @@ class PreferencesStorage(
     }
 
     override fun remove(key: String) {
-        preferences.edit {
+        preferences.edit(commit = synchronous) {
             remove("${prefix}.${key}")
         }
     }

@@ -26,6 +26,8 @@ class DevicePauseStore(
     /** The credential-encrypted source of the one-time copy; only called while unlocked. */
     private val legacy: () -> PauseStore,
     private val isUnlocked: () -> Boolean,
+    /** Called with a short reason (no personal data) when the state had to be repaired. */
+    private val onRepair: (String) -> Unit = {},
 ) : PauseStore {
 
     data class Stored(
@@ -55,13 +57,40 @@ class DevicePauseStore(
         val old = legacy()
         val copied = Stored(old.pausedAtMs, old.resumedAtMs, old.holdMaxMin, migrated = true)
         storage.set(KEY, copied)
+        if (old.pausedAtMs == LEGACY_MARK && old.resumedAtMs == null) {
+            // V2-L25: the copy was done before and the file is gone now. The old copy was
+            // marked paused then, so this reads as paused, not as the stale pre-update value.
+            report("the pause file was lost; the state was restored as paused")
+        } else {
+            // Mark the old copy paused: a lost DE file (or a downgrade to a build that reads
+            // these fields) must fail closed, never reopen the gate from a stale value.
+            try {
+                old.pausedAtMs = LEGACY_MARK
+                old.resumedAtMs = null
+            } catch (e: Exception) {
+                report("the old pause copy could not be marked: ${e.javaClass.simpleName}")
+            }
+        }
         return copied
     }
 
     private fun rewriteCorrupt(): Stored {
         val clean = Stored(pausedAtMs = 0L, resumedAtMs = null, holdMaxMin = null, migrated = true)
-        storage.set(KEY, clean)
+        try {
+            storage.set(KEY, clean)
+        } catch (e: Exception) {
+            // still answer paused for this read
+        }
+        report("the pause value was unreadable; the state was reset to paused")
         return clean
+    }
+
+    private fun report(reason: String) {
+        try {
+            onRepair(reason)
+        } catch (e: Exception) {
+            // logging must never break the gate
+        }
     }
 
     @Synchronized
@@ -99,8 +128,15 @@ class DevicePauseStore(
         private const val PREFIX = "pause"
         private const val KEY = "state"
 
+        /** pausedAtMs written to the old credential-encrypted copy after the one-time copy: "paused". */
+        const val LEGACY_MARK = 1L
+
         /** A fixed device-protected file, whatever the outcome of the other storage copy was. */
-        fun create(context: Context, legacy: () -> PauseStore): DevicePauseStore {
+        fun create(
+            context: Context,
+            onRepair: (String) -> Unit = {},
+            legacy: () -> PauseStore,
+        ): DevicePauseStore {
             val app = context.applicationContext
             val deContext = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
                 app.createDeviceProtectedStorageContext()
@@ -108,9 +144,15 @@ class DevicePauseStore(
                 app
             }
             return DevicePauseStore(
-                PreferencesStorage(deContext.getSharedPreferences(FILE, Context.MODE_PRIVATE), PREFIX),
+                // commit(): the pause must survive a kill right after it is set
+                PreferencesStorage(
+                    deContext.getSharedPreferences(FILE, Context.MODE_PRIVATE),
+                    PREFIX,
+                    synchronous = true,
+                ),
                 legacy,
                 isUnlocked = { DeviceStorage.isUnlocked(app) },
+                onRepair = onRepair,
             )
         }
     }

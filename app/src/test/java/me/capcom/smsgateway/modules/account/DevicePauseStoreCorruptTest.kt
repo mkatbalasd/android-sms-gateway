@@ -92,6 +92,66 @@ internal class DevicePauseStoreCorruptTest {
         assertEquals(now, storeOver(storage, unlocked = false).pausedAtMs)
     }
 
+    // V2-L25: a LOST device-protected file must not reopen the gate from stale legacy values.
+
+    @Test
+    fun aLostFileAfterAResumeDoesNotReopenTheGateFromTheOldCredentialStoredValues() {
+        val storage = FakeKeyValueStorage()
+        // the credential-encrypted copy still says "paused 1h ago"; the user resumed since
+        val legacy = Plain().apply { pausedAtMs = now - 3_600_000 }
+        val first = DevicePauseStore(storage, { legacy }, isUnlocked = { true })
+        first.resumedAtMs = now
+        assertFalse(first.isPaused)
+
+        // the DE file is lost (or its migration flag is gone); the old copy says resumed=null
+        storage.values.clear()
+        val warnings = mutableListOf<String>()
+        val after = DevicePauseStore(storage, { legacy }, isUnlocked = { true }, onRepair = { warnings.add(it) })
+
+        assertTrue("a lost file reads as paused", after.isPaused)
+        assertEquals("the repair is logged once", 1, warnings.size)
+    }
+
+    @Test
+    fun theOldCredentialStoredCopyIsMarkedPausedAfterTheOneTimeCopy() {
+        val storage = FakeKeyValueStorage()
+        val legacy = Plain().apply { resumedAtMs = now }
+        val store = DevicePauseStore(storage, { legacy }, isUnlocked = { true })
+
+        assertFalse(store.isPaused)
+
+        // a downgrade to a build that reads the old fields, or a lost file, sees paused
+        assertNotNull(legacy.pausedAtMs)
+        assertEquals(null, legacy.resumedAtMs)
+    }
+
+    @Test
+    fun aFirstCopyIsNotReportedAsARepair() {
+        val warnings = mutableListOf<String>()
+        val store = DevicePauseStore(FakeKeyValueStorage(), { Plain() }, isUnlocked = { true }, onRepair = { warnings.add(it) })
+
+        assertFalse(store.isPaused)
+        assertTrue(warnings.isEmpty())
+    }
+
+    @Test
+    fun aCorruptValueIsLogged() {
+        val storage = FakeKeyValueStorage()
+        storeOver(storage).holdMaxMin = 30
+        corrupt(storage)
+        val warnings = mutableListOf<String>()
+
+        assertTrue(DevicePauseStore(storage, { Plain() }, isUnlocked = { true }, onRepair = { warnings.add(it) }).isPaused)
+
+        assertEquals(1, warnings.size)
+    }
+
+    @Test
+    fun thePauseFileIsWrittenSynchronously() {
+        val source = me.capcom.smsgateway.modules.gateway.PauseGateSources.read("modules/account/DevicePauseStore.kt")
+        assertTrue(source.contains("synchronous = true"))
+    }
+
     @Test
     fun theHomeScreenCountsAnUnreadableStateAsPaused() {
         val source = me.capcom.smsgateway.modules.gateway.PauseGateSources.read("ui/account/HomeV2Fragment.kt")
