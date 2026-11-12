@@ -7,25 +7,31 @@ import java.lang.reflect.Type
 class PreferencesStorage(
     private val preferences: SharedPreferences,
     private val prefix: String,
-    serializer: ValueSerializer? = null
+    serializer: ValueSerializer? = null,
+    /** true: write with commit() (synchronous) instead of apply(). */
+    private val synchronous: Boolean = false,
 ): KeyValueStorage {
     private val serializer = serializer ?: ValueSerializer()
 
     override fun <T> set(key: String, value: T) {
-        preferences.edit {
-            if (value == null) {
-                remove("${prefix}.${key}")
-                return@edit
-            }
-
+        val editor = preferences.edit()
+        if (value == null) {
+            editor.remove("${prefix}.${key}")
+        } else {
             when (value) {
-                is Long -> putLong("${prefix}.${key}", value)
-                is Int -> putInt("${prefix}.${key}", value)
-                is String -> putString("${prefix}.${key}", value)
-                is Boolean -> putBoolean("${prefix}.${key}", value)
-                is Float -> putFloat("${prefix}.${key}", value)
-                else -> putString("${prefix}.${key}", serializer.serialize(value))
+                is Long -> editor.putLong("${prefix}.${key}", value)
+                is Int -> editor.putInt("${prefix}.${key}", value)
+                is String -> editor.putString("${prefix}.${key}", value)
+                is Boolean -> editor.putBoolean("${prefix}.${key}", value)
+                is Float -> editor.putFloat("${prefix}.${key}", value)
+                else -> editor.putString("${prefix}.${key}", serializer.serialize(value))
             }
+        }
+        if (synchronous) {
+            // A failed write must not pass silently: the caller fails closed on the exception.
+            if (!editor.commit()) throw java.io.IOException("preferences write failed")
+        } else {
+            editor.apply()
         }
     }
 
@@ -46,7 +52,7 @@ class PreferencesStorage(
     }
 
     override fun remove(key: String) {
-        preferences.edit {
+        preferences.edit(commit = synchronous) {
             remove("${prefix}.${key}")
         }
     }
