@@ -208,6 +208,25 @@ class StaleSweep(
         return dropped
     }
 
+    /**
+     * rev-fork24-1 L6 (in-flight money): the same sweep, run while the phone is paused and
+     * not only at the owner's resume. A phone paused SILENTLY (lost or corrupt pause file)
+     * is unknown to the platform, which has already handed it messages and no longer
+     * expires them; without this they wait for the owner to tap Resume. Does nothing when
+     * the phone is not paused (the kept [PauseStore.pausedAtMs] of an old pause must not
+     * fail fresh messages) or when the state cannot be read (it is retried on the next call).
+     */
+    suspend fun sweepWhilePaused(): Int {
+        val paused = try {
+            settings.isPaused
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+        return if (paused) sweep() else 0
+    }
+
     companion object {
         /** The platform maps this reason to EXPIRED. */
         const val REASON = "TTL expired"
