@@ -58,7 +58,15 @@ class AndroidLocalCleanup(
         try {
             pauseStore.reset()
         } catch (e: Exception) {
-            // continue
+            // rev-fork28-1 L3: the old copy was just cleared and the DE file keeps its mark
+            // flag, so put the "paused" mark on the old copy directly (a later lost file
+            // then still reads paused).
+            try {
+                accountSettings.pausedAtMs = DevicePauseStore.LEGACY_MARK
+                accountSettings.resumedAtMs = null
+            } catch (e2: Exception) {
+                // continue
+            }
         }
         KeepAliveGuideDialogFragment.forget(appContext)
 

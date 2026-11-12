@@ -173,6 +173,21 @@ data class PendingStamp(val id: String, val createdAt: Long)
 interface PendingStore {
     suspend fun pending(): List<PendingStamp>
     suspend fun fail(id: String, reason: String)
+
+    /**
+     * Fails the message only if it is still wholly Pending at the moment of the write
+     * (decided under the per-message lock). False when it moved on. The default is [fail].
+     */
+    suspend fun failIfPending(id: String, reason: String): Boolean {
+        fail(id, reason)
+        return true
+    }
+
+    /**
+     * Runs [block] only while no send is in progress (a message mid-submit is still Pending
+     * and must not be failed); null when it was skipped. The default always runs it.
+     */
+    suspend fun <T> whenNotSending(block: suspend () -> T): T? = block()
 }
 
 /** Marks every pending message that was held longer than the limit Failed ("TTL expired"). */
@@ -196,7 +211,8 @@ class StaleSweep(
         for (message in store.pending()) {
             if (!PauseHold.heldTooLong(message.createdAt, pausedAt, now, holdMax)) continue
             try {
-                store.fail(message.id, REASON)
+                // rev-fork28-1: a message that left Pending since the snapshot is neither failed nor reported
+                if (!store.failIfPending(message.id, REASON)) continue
                 dropped++
                 reporter.report(message.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -224,7 +240,10 @@ class StaleSweep(
         } catch (e: Exception) {
             false
         }
-        return if (paused) sweep() else 0
+        if (!paused) return 0
+        // Never overlap a submit in progress (the send loop's message is still Pending until
+        // the submit returns); a skipped sweep is retried by the next refresh or at Resume.
+        return store.whenNotSending { sweep() } ?: 0
     }
 
     companion object {

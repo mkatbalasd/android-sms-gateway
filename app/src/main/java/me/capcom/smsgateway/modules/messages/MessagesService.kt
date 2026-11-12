@@ -64,7 +64,7 @@ class MessagesService(
     private val sendWorkerLock = Any()
 
     /** MessagesService is a Koin single, so this is the process-wide gate. */
-    private val sendGate = SendGate()
+    internal val sendGate = SendGate()
     val processingOrder
         get() = settings.processingOrder
 
