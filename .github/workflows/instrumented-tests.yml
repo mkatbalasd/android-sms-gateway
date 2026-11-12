@@ -7,6 +7,11 @@ on:
     branches: [master, mnaseb-sim]
     paths: ["app/**", ".github/workflows/instrumented-tests.yml"]
 
+# Only a superseded pull_request run is cancelled; pushes to mnaseb-sim/master are never.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   # Device-paired E2E lives behind Android Keystore, whose RSA-OAEP behaviour is
   # API-level dependent, so a JVM unit test cannot cover it - build-apk.yml only runs

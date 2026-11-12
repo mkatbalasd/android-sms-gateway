@@ -1,9 +1,10 @@
 name: Mnaseb SIM Release
 
 # Builds the Mnaseb SIM release APK.
-# - push to mnaseb-sim (app or this workflow changed): build, sign when the
-#   signing secrets exist, upload as a workflow artifact.
-# - tag mnaseb-sim-v<version>: same build; a signed APK and its SHA-256 are
+# - push to mnaseb-sim (app or this workflow changed): LIGHT check only - unit
+#   tests and the unsigned release build (assembleRelease, which runs the fatal
+#   lintVitalRelease). No signing, no artifact upload, no publish.
+# - tag mnaseb-sim-v<version>: the full build; a signed APK and its SHA-256 are
 #   attached to a GitHub release. A tag never publishes an unsigned APK.
 #
 # Repository secrets (Settings > Secrets and variables > Actions):
@@ -110,6 +111,7 @@ jobs:
 
       - name: Sign APK
         id: sign
+        if: github.ref_type == 'tag'
         env:
           KS_BASE64: ${{ secrets.MNASEB_SIM_KEYSTORE_BASE64 }}
           KS_PASSWORD: ${{ secrets.MNASEB_SIM_KEYSTORE_PASSWORD }}
@@ -149,7 +151,7 @@ jobs:
       # Informational: this step never fails the build.
       - name: Certificate fingerprint and continuity
         id: cert
-        if: steps.sign.outputs.signed == 'true'
+        if: github.ref_type == 'tag' && steps.sign.outputs.signed == 'true'
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
@@ -188,6 +190,7 @@ jobs:
           echo "Certificate against ${PREV_TAG:-no previous release}: **${STATE}**" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload APK
+        if: github.ref_type == 'tag'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mnaseb-sim-${{ steps.version.outputs.version }}
