@@ -226,7 +226,8 @@ internal class FakeMessagesDao : MessagesDao {
     override fun nextScheduledTime(): Long? = null
 
     override suspend fun selectPendingStamps(): List<me.capcom.smsgateway.modules.account.PendingStamp> =
-        emptyList()
+        messages.values.filter { it.state == ProcessingState.Pending }
+            .map { me.capcom.smsgateway.modules.account.PendingStamp(it.id, it.createdAt) }
 
     override fun countExpeditedDue(minPriority: Byte, now: Date): Int = 0
 

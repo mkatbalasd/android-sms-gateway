@@ -57,7 +57,7 @@ internal class DevicePauseStoreCorruptTest {
     fun theResumeAfterACorruptValueLeavesAReadableNotPausedState() = runBlocking {
         val (storage, store) = damaged()
         val events = mutableListOf<String>()
-        val pending = object : PendingStore {
+        val pending = object : DelegatingPendingStore() {
             override suspend fun pending() = emptyList<PendingStamp>()
             override suspend fun fail(id: String, reason: String) {}
         }

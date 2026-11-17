@@ -2,6 +2,9 @@ package me.capcom.smsgateway.modules.account
 
 import android.content.Context
 import android.os.Build
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import me.capcom.smsgateway.BuildConfig
 import me.capcom.smsgateway.modules.encryption.EncryptionService
 import me.capcom.smsgateway.modules.gateway.GatewaySettings
@@ -36,6 +39,16 @@ val accountModule = module {
             onRepair = { reason ->
                 // a WARN with a fixed reason text, no numbers, no message content
                 get<LogsService>().insert(LogEntry.Priority.WARN, "pause", reason)
+                // rev-fork24-1 L6: a repair paused the phone without telling the platform;
+                // end what it already holds past the limit now (off the caller's thread,
+                // because the store is mid-read here). A no-op when not paused.
+                CoroutineScope(Dispatchers.IO).launch {
+                    try {
+                        get<StaleSweep>().sweepWhilePaused()
+                    } catch (e: Exception) {
+                        // the next refresh or the resume sweeps again
+                    }
+                }
             },
         ) { get<AccountSettings>() }
     }

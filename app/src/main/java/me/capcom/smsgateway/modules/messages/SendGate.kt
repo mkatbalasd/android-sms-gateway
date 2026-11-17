@@ -20,5 +20,15 @@ class SendGate {
     val isHeld: Boolean
         get() = mutex.isLocked
 
+    /** Runs [block] only when no send is in progress; null (block not run) when the gate is held. */
+    suspend fun <T> exclusiveOrNull(block: suspend () -> T): T? {
+        if (!mutex.tryLock()) return null
+        try {
+            return block()
+        } finally {
+            mutex.unlock()
+        }
+    }
+
     suspend fun <T> exclusive(block: suspend () -> T): T = mutex.withLock { block() }
 }

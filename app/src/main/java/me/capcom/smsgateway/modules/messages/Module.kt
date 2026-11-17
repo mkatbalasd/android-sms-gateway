@@ -11,7 +11,7 @@ val messagesModule = module {
     singleOf(::MessagesRepository)
     singleOf(::MessagesService)
     singleOf(::MessageStateService)
-    single<PendingStore> { RoomPendingStore(get(), get()) }
+    single<PendingStore> { RoomPendingStore(get(), get()) { get<MessagesService>().sendGate } }
     viewModel { MessagesListViewModel(get()) }
     viewModel { MessageDetailsViewModel(get()) }
 }

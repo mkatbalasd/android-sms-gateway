@@ -173,6 +173,18 @@ data class PendingStamp(val id: String, val createdAt: Long)
 interface PendingStore {
     suspend fun pending(): List<PendingStamp>
     suspend fun fail(id: String, reason: String)
+
+    /**
+     * Fails the message only if it is still wholly Pending at the moment of the write
+     * (decided under the per-message lock). False when it moved on. No default: a store must say.
+     */
+    suspend fun failIfPending(id: String, reason: String): Boolean
+
+    /**
+     * Runs [block] only while no send is in progress (a message mid-submit is still Pending
+     * and must not be failed); null when it was skipped. No default: a store must say.
+     */
+    suspend fun <T> whenNotSending(block: suspend () -> T): T?
 }
 
 /** Marks every pending message that was held longer than the limit Failed ("TTL expired"). */
@@ -196,7 +208,8 @@ class StaleSweep(
         for (message in store.pending()) {
             if (!PauseHold.heldTooLong(message.createdAt, pausedAt, now, holdMax)) continue
             try {
-                store.fail(message.id, REASON)
+                // rev-fork28-1: a message that left Pending since the snapshot is neither failed nor reported
+                if (!store.failIfPending(message.id, REASON)) continue
                 dropped++
                 reporter.report(message.id)
             } catch (e: kotlinx.coroutines.CancellationException) {
@@ -206,6 +219,28 @@ class StaleSweep(
             }
         }
         return dropped
+    }
+
+    /**
+     * rev-fork24-1 L6 (in-flight money): the same sweep, run while the phone is paused and
+     * not only at the owner's resume. A phone paused SILENTLY (lost or corrupt pause file)
+     * is unknown to the platform, which has already handed it messages and no longer
+     * expires them; without this they wait for the owner to tap Resume. Does nothing when
+     * the phone is not paused (the kept [PauseStore.pausedAtMs] of an old pause must not
+     * fail fresh messages) or when the state cannot be read (it is retried on the next call).
+     */
+    suspend fun sweepWhilePaused(): Int {
+        val paused = try {
+            settings.isPaused
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            false
+        }
+        if (!paused) return 0
+        // Never overlap a submit in progress (the send loop's message is still Pending until
+        // the submit returns); a skipped sweep is retried by the next refresh or at Resume.
+        return store.whenNotSending { sweep() } ?: 0
     }
 
     companion object {

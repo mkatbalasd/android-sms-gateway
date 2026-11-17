@@ -202,6 +202,17 @@ class HomeV2Fragment : Fragment() {
             homeFailed = false
             homeErrorCode = null
             applyPauseFrom(fresh, requestedAt)
+            // rev-fork24-1 L6: a paused phone ends what it already holds past the limit
+            // (reported at once), not only at the owner's resume.
+            if (!pauseBusy) {
+                try {
+                    staleSweep.sweepWhilePaused()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    // the next refresh retries; the resume sweeps again anyway
+                }
+            }
         } catch (e: CancellationException) {
             throw e
         } catch (e: AccountException) {
