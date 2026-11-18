@@ -139,17 +139,19 @@ internal class SweepWhilePausedTest {
     }
 
     @Test
-    fun aSucceedingResetLeavesTheOldCopyToTheNormalMark() {
+    fun aSucceedingResetClearsAPausedStateAndMarksTheOldCopy() {
+        // L1: seeded paused, so a no-op resetOrMarkLegacy leaves it paused and fails here.
         val storage = FakeKeyValueStorage()
+        storage.set("state", DevicePauseStore.Stored(pausedAtMs = now, migrated = true, legacyMarked = true))
         val old = Plain()
         val store = DevicePauseStore(storage, { old }, isUnlocked = { true })
+        assertTrue(store.isPaused)
 
         store.resetOrMarkLegacy(old)
 
-        // reset() wrote a clean not-paused file and the normal unlocked read marked the old copy
         assertEquals(false, store.isPaused)
-        assertEquals(DevicePauseStore.LEGACY_MARK, old.pausedAtMs)
         assertEquals(null, storage.get<DevicePauseStore.Stored>("state")?.pausedAtMs)
+        assertEquals(DevicePauseStore.LEGACY_MARK, old.pausedAtMs)
     }
 
     @Test

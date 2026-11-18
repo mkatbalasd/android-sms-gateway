@@ -151,14 +151,17 @@ internal class ProofAttemptGuardTest {
         assertEquals(0, ok.calls)
     }
 
-    /** A log whose commit can fail (disk full, a storage fault): add reports false and keeps nothing. */
+    /**
+     * A log whose commit can fail (disk full, a storage fault). It models SharedPreferences.commit():
+     * the key goes into the in-memory map first and the call then returns false when the disk write
+     * fails, so the key STAYS in memory (AOSP SharedPreferencesImpl.commitToMemory does not roll back).
+     */
     private class FlakyLog(var durable: Boolean) : AttemptLog {
         private val map = HashMap<String, Long>()
         override fun entries(): Map<String, Long> = HashMap(map)
         override fun add(key: String, atMs: Long): Boolean {
-            if (!durable) return false
             map[key] = atMs
-            return true
+            return durable
         }
 
         override fun remove(key: String) {
@@ -182,9 +185,12 @@ internal class ProofAttemptGuardTest {
 
         assertEquals("no radio call without a durable record", 0, sender.calls)
         assertEquals(RowPhase.SEND_FAILED, first.phase)
+        // FlakyLog stored the key before failing; only the guard's remove (ProofAttemptGuard.kt:52) clears it.
         assertTrue("nothing half-written is left behind", log.entries().isEmpty())
 
-        // the storage works again: the kept text is resent exactly once
+        // the storage works again: the kept text is resent exactly once. Without the remove at
+        // ProofAttemptGuard.kt:52 the stored key makes begin return CONSUMED, nothing is sent,
+        // and the assertions below (one send, one entry) fail.
         log.durable = true
         v.verify(first)
         assertEquals(1, sender.calls)
@@ -196,8 +202,10 @@ internal class ProofAttemptGuardTest {
         val flaky = FlakyLog(durable = false)
         val guard = ProofAttemptGuard(flaky) { 0L }
         assertEquals(ProofAttemptGuard.Begin.NOT_RECORDED, guard.begin("k"))
+        assertTrue("the half-written key is removed", flaky.entries().isEmpty())
         assertFalse(guard.tryBegin("k"))
         flaky.durable = true
+        // Without the remove at ProofAttemptGuard.kt:52 this is CONSUMED (the stored key), not GO.
         assertEquals(ProofAttemptGuard.Begin.GO, guard.begin("k"))
         assertEquals(ProofAttemptGuard.Begin.CONSUMED, guard.begin("k"))
     }
