@@ -234,9 +234,17 @@ class NumbersVerifier(
         }
         // One token, one SMS: record the attempt durably before the radio is asked.
         val key = ProofAttemptGuard.key(row.slot, proof.to, proof.text)
-        if (!guard.tryBegin(key)) {
-            unsent.remove(row.slot)
-            return row.copy(phase = RowPhase.OPEN_PROOF, method = proof.method, retryMinutes = PROOF_TTL_MINUTES)
+        when (guard.begin(key)) {
+            ProofAttemptGuard.Begin.GO -> Unit
+            ProofAttemptGuard.Begin.CONSUMED -> {
+                unsent.remove(row.slot)
+                return row.copy(phase = RowPhase.OPEN_PROOF, method = proof.method, retryMinutes = PROOF_TTL_MINUTES)
+            }
+            ProofAttemptGuard.Begin.NOT_RECORDED -> {
+                // rev-fork15-1 L4: the record is not durable, so nothing is sent; the same text may be retried.
+                unsent[row.slot] = proof
+                return row.copy(phase = RowPhase.SEND_FAILED, method = proof.method)
+            }
         }
         onPhase(RowPhase.SENDING)
         // MO: to the platform line. LOOPBACK: to the typed number, which the platform returns as `to`.

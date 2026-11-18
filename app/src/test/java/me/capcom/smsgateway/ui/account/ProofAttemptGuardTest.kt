@@ -151,6 +151,57 @@ internal class ProofAttemptGuardTest {
         assertEquals(0, ok.calls)
     }
 
+    /** A log whose commit can fail (disk full, a storage fault): add reports false and keeps nothing. */
+    private class FlakyLog(var durable: Boolean) : AttemptLog {
+        private val map = HashMap<String, Long>()
+        override fun entries(): Map<String, Long> = HashMap(map)
+        override fun add(key: String, atMs: Long): Boolean {
+            if (!durable) return false
+            map[key] = atMs
+            return true
+        }
+
+        override fun remove(key: String) {
+            map.remove(key)
+        }
+    }
+
+    @Test
+    fun aRecordThatCannotBeMadeDurableSendsNothingAndTheNextTapMayRetry() = runBlocking {
+        // rev-fork15-1 L4: the old guard ignored the commit result, so the SMS went out with no
+        // durable record, and a restart then sent the same proof text a second time.
+        val clock = Clock()
+        val log = FlakyLog(durable = false)
+        val client = FakeAppClient()
+        client.verifyAnswer = { tokenA }
+        client.linesAnswer = { emptyList() }
+        val sender = Sender()
+        val v = verifier(client, sender, log, clock)
+
+        val first = v.verify(row)
+
+        assertEquals("no radio call without a durable record", 0, sender.calls)
+        assertEquals(RowPhase.SEND_FAILED, first.phase)
+        assertTrue("nothing half-written is left behind", log.entries().isEmpty())
+
+        // the storage works again: the kept text is resent exactly once
+        log.durable = true
+        v.verify(first)
+        assertEquals(1, sender.calls)
+        assertEquals(1, log.entries().size)
+    }
+
+    @Test
+    fun beginTellsConsumedFromNotRecorded() {
+        val flaky = FlakyLog(durable = false)
+        val guard = ProofAttemptGuard(flaky) { 0L }
+        assertEquals(ProofAttemptGuard.Begin.NOT_RECORDED, guard.begin("k"))
+        assertFalse(guard.tryBegin("k"))
+        flaky.durable = true
+        assertEquals(ProofAttemptGuard.Begin.GO, guard.begin("k"))
+        assertEquals(ProofAttemptGuard.Begin.CONSUMED, guard.begin("k"))
+    }
+
     @Test
     fun aSecondTriggerOnTheSameSlotWhileOneRunsDoesNothing() = runBlocking {
         val clock = Clock()

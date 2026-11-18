@@ -1,6 +1,7 @@
 package me.capcom.smsgateway.modules.account
 
 import kotlinx.coroutines.runBlocking
+import me.capcom.smsgateway.modules.settings.get
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -122,13 +123,40 @@ internal class SweepWhilePausedTest {
 
     @Test
     fun whenTheResetFailsTheUnlinkMarksTheOldCopyPaused() {
-        // source scan (AndroidLocalCleanup needs the whole app graph to construct)
+        // rev-fork28-3 L2: behaviour, not text. The unlink step runs the real code with a failing commit.
+        val failing = object : me.capcom.smsgateway.modules.settings.KeyValueStorage {
+            override fun <T> set(key: String, value: T) = throw java.io.IOException("commit failed")
+            override fun <T> get(key: String, typeOfT: java.lang.reflect.Type): T? = null
+            override fun remove(key: String) {}
+        }
+        val old = Plain().also { it.pausedAtMs = null; it.resumedAtMs = 5L } // what a cleared old copy looks like after a resume
+        val store = DevicePauseStore(failing, { old }, isUnlocked = { true })
+
+        store.resetOrMarkLegacy(old) // must not throw
+
+        assertEquals(DevicePauseStore.LEGACY_MARK, old.pausedAtMs)
+        assertEquals(null, old.resumedAtMs)
+    }
+
+    @Test
+    fun aSucceedingResetLeavesTheOldCopyToTheNormalMark() {
+        val storage = FakeKeyValueStorage()
+        val old = Plain()
+        val store = DevicePauseStore(storage, { old }, isUnlocked = { true })
+
+        store.resetOrMarkLegacy(old)
+
+        // reset() wrote a clean not-paused file and the normal unlocked read marked the old copy
+        assertEquals(false, store.isPaused)
+        assertEquals(DevicePauseStore.LEGACY_MARK, old.pausedAtMs)
+        assertEquals(null, storage.get<DevicePauseStore.Stored>("state")?.pausedAtMs)
+    }
+
+    @Test
+    fun forgetLinkRunsTheMarkingUnlinkStep() {
+        // glue scan only: AndroidLocalCleanup needs the whole app graph to construct
         val source = me.capcom.smsgateway.modules.gateway.PauseGateSources.read("modules/account/AndroidLocalCleanup.kt")
-        val at = source.indexOf("pauseStore.reset()")
-        assertTrue(at >= 0)
-        val catchBlock = source.substring(at, minOf(source.length, at + 700))
-        assertTrue(catchBlock.contains("accountSettings.pausedAtMs = DevicePauseStore.LEGACY_MARK"))
-        assertTrue(catchBlock.contains("accountSettings.resumedAtMs = null"))
+        assertTrue(source.contains("pauseStore.resetOrMarkLegacy(accountSettings)"))
     }
 
     @Test
@@ -149,9 +177,9 @@ internal class SweepWhilePausedTest {
         assertTrue("reset surfaces the failed commit", thrown)
 
         val source = me.capcom.smsgateway.modules.gateway.PauseGateSources.read("modules/account/AndroidLocalCleanup.kt")
-        val at = source.indexOf("pauseStore.reset()")
-        assertTrue(at >= 0)
-        val before = source.substring(maxOf(0, at - 40), at)
-        assertTrue("forgetLink guards the reset", before.contains("try"))
+        // the guard now lives in resetOrMarkLegacy (behaviour-tested above); forgetLink must call it
+        // and never the bare reset()
+        assertTrue(source.contains("pauseStore.resetOrMarkLegacy(accountSettings)"))
+        assertTrue("no unguarded reset", !source.contains("pauseStore.reset()"))
     }
 }
