@@ -171,6 +171,25 @@ class DevicePauseStore(
         }
     }
 
+    /**
+     * The unlink's pause step, as one testable unit (rev-fork28-3 L2). A failing [reset] must
+     * not abort the rest of the unlink; the old copy [old] was just cleared and the DE file
+     * keeps its mark flag, so the "paused" mark goes onto the old copy directly (a later lost
+     * file then still reads paused). Never throws.
+     */
+    fun resetOrMarkLegacy(old: PauseStore) {
+        try {
+            reset()
+        } catch (e: Exception) {
+            try {
+                old.pausedAtMs = LEGACY_MARK
+                old.resumedAtMs = null
+            } catch (e2: Exception) {
+                // continue
+            }
+        }
+    }
+
     companion object {
         private const val FILE = "mnaseb_pause"
         private const val PREFIX = "pause"

@@ -7,8 +7,11 @@ import java.security.MessageDigest
 interface AttemptLog {
     fun entries(): Map<String, Long>
 
-    /** Must be durable when it returns: the SMS is sent right after. */
-    fun add(key: String, atMs: Long)
+    /**
+     * Must be durable when it returns: the SMS is sent right after. Returns false when the
+     * record could not be made durable (rev-fork15-1 L4): the caller must then NOT send.
+     */
+    fun add(key: String, atMs: Long): Boolean
     fun remove(key: String)
 }
 
@@ -25,14 +28,31 @@ class ProofAttemptGuard(
     private val nowMs: () -> Long,
 ) {
 
-    /** True once for this attempt: the caller may send. False when it was already consumed. */
+    enum class Begin { GO, CONSUMED, NOT_RECORDED }
+
+    /** True once for this attempt: the caller may send. False when it was already consumed or not recorded. */
+    fun tryBegin(key: String): Boolean = begin(key) == Begin.GO
+
+    /**
+     * [Begin.GO] once for this attempt. [Begin.CONSUMED] when it was already used.
+     * [Begin.NOT_RECORDED] when the durable record failed: nothing may be sent (a restart
+     * could then send the same text again), and nothing was sent, so a next tap may retry.
+     */
     @Synchronized
-    fun tryBegin(key: String): Boolean {
+    fun begin(key: String): Begin {
         val now = nowMs()
         log.entries().forEach { (k, at) -> if (now - at > RETAIN_MS) log.remove(k) }
-        if (log.entries().containsKey(key)) return false
-        log.add(key, now)
-        return true
+        if (log.entries().containsKey(key)) return Begin.CONSUMED
+        val recorded = try {
+            log.add(key, now)
+        } catch (e: Exception) {
+            false
+        }
+        if (!recorded) {
+            runCatching { log.remove(key) } // a half-written entry must not block the retry
+            return Begin.NOT_RECORDED
+        }
+        return Begin.GO
     }
 
     /**
@@ -56,8 +76,9 @@ class ProofAttemptGuard(
 class MemoryAttemptLog : AttemptLog {
     private val map = HashMap<String, Long>()
     override fun entries(): Map<String, Long> = HashMap(map)
-    override fun add(key: String, atMs: Long) {
+    override fun add(key: String, atMs: Long): Boolean {
         map[key] = atMs
+        return true
     }
 
     override fun remove(key: String) {
@@ -72,9 +93,7 @@ class PrefsAttemptLog(context: Context) : AttemptLog {
     override fun entries(): Map<String, Long> =
         prefs.all.mapNotNull { (k, v) -> (v as? Long)?.let { k to it } }.toMap()
 
-    override fun add(key: String, atMs: Long) {
-        prefs.edit().putLong(key, atMs).commit()
-    }
+    override fun add(key: String, atMs: Long): Boolean = prefs.edit().putLong(key, atMs).commit()
 
     override fun remove(key: String) {
         prefs.edit().remove(key).commit()
