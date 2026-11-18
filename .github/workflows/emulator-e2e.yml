@@ -99,7 +99,8 @@ jobs:
 
       - name: Wall minutes
         if: always()
-        run: echo "build: $(( ($(date +%s) - T0) / 60 )) min" >> "$GITHUB_STEP_SUMMARY"
+        run: |
+          echo "build job wall minutes = $(( ($(date +%s) - T0) / 60 ))" >> "$GITHUB_STEP_SUMMARY"
 
   # ---- draft PR: the short subset
   smoke:
