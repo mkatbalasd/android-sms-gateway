@@ -1,0 +1,7 @@
+# Quarantine list for the emulator e2e suite (.github/workflows/emulator-e2e.yml).
+# One fully qualified test class per line; the runner passes them as `-e notClass a,b,c`.
+# Columns, separated by " | ":   test | root cause | ROADMAP row
+# A quarantined test is NOT deleted or weakened: it stays in the tree, is skipped in CI, and
+# needs a root cause and a ROADMAP row to come back. Lines starting with # are ignored.
+#
+# test | root cause | ROADMAP row

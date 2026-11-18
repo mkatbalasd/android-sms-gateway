@@ -91,7 +91,7 @@ class GatewaySettings(
     // Mnaseb SIM: the server is fixed to the Mnaseb private server (decision
     // 0008). A stored cloud_url (old settings screen or remote import) is ignored.
     val serverUrl: String
-        get() = PUBLIC_URL
+        get() = me.capcom.smsgateway.e2e.Endpoints.gatewayBase // PUBLIC_URL except in emulatorE2e
     val privateToken: String?
         get() = storage.get<String>(PRIVATE_TOKEN)
 

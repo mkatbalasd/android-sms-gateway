@@ -1,0 +1,310 @@
+name: Emulator E2E
+
+# Mnaseb SIM fork: the app on an Android emulator against a dependency-free STUB of the platform
+# (e2e/stub-server). The stub is used because the platform's private images cannot be pulled by
+# this public fork's runners. See e2e/README.md for what is proven in simulation and what only a
+# real phone can prove.
+#
+# COST GUARD
+#   - draft PR (every push to it):  build + release guard + SMOKE (install, sign-up screen, stub reachable)
+#   - ready PR (ready_for_review/synchronize, not draft), push to mnaseb-sim, manual run:  FULL flow,
+#     Direct Boot, and the (non-blocking) Play Protect observation
+#   - never runs on a draft PR beyond the smoke subset; a superseded PR run is cancelled
+# FLAKINESS NEVER BLOCKS MERGES: nothing here is a required check (branch protection is untouched).
+# A flaky class is quarantined in e2e/quarantine.txt (test | root cause | ROADMAP row); the runner
+# honours it with `-e notClass`. A failed run is reported, never re-run to green.
+# No secrets are used. The release-signed APK install is in emulator-e2e-release-install.yml.
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, synchronize, reopened]
+    paths: ["app/**", "e2e/**", ".github/workflows/emulator-e2e.yml"]
+  push:
+    branches: [mnaseb-sim]
+    paths: ["app/**", "e2e/**", ".github/workflows/emulator-e2e.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  E2E_APK: dist-e2e/app-emulatorE2e.apk
+  E2E_TEST_APK: dist-e2e/app-emulatorE2e-androidTest.apk
+  E2E_OUT: e2e-out
+
+jobs:
+  # ---- cheap, no emulator: stub self-test, the T2 release guard, and the APKs the emulator jobs use
+  build:
+    name: Build, release guard
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup JAVA 17
+        uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00 # v4.7.1
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Setup Gradle
+        uses: gradle/actions/setup-gradle@ac638b010cf58a27ee6c972d7336334ccaf61c96 # v4.4.1
+
+      - name: Placeholder google-services.json
+        run: bash e2e/placeholder-google-services.sh
+
+      - name: Stub server self-test
+        run: node e2e/stub-server/selftest.js
+
+      # T2: no override may exist outside the emulatorE2e build type. JVM side, on the variants
+      # that ship (debug builds and release).
+      - name: JVM override guard (debug and release variants)
+        run: >
+          ./gradlew :app:testDebugUnitTest :app:testReleaseUnitTest
+          --tests 'me.capcom.smsgateway.e2e.EndpointOverrideGuardTest'
+
+      - name: Build release APK (unsigned, no keystore)
+        run: |
+          test ! -f app/keystore.jks
+          ./gradlew :app:assembleRelease
+          ls -l app/build/outputs/apk/release/
+
+      - name: Build emulatorE2e APK and its test APK
+        run: ./gradlew -Pe2eBuildType=emulatorE2e :app:assembleEmulatorE2e :app:assembleEmulatorE2eAndroidTest
+
+      # T2, binary side: grep the built release APK; fails closed (the e2e APK is the control).
+      - name: Release guard (override absent from release, present in e2e)
+        run: >
+          bash e2e/release-guard.sh
+          app/build/outputs/apk/release/app-release-unsigned.apk
+          app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk
+
+      - name: Collect e2e APKs
+        run: |
+          mkdir -p dist-e2e
+          cp app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk dist-e2e/
+          cp app/build/outputs/apk/androidTest/emulatorE2e/app-emulatorE2e-androidTest.apk dist-e2e/
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: e2e-apks
+          path: dist-e2e/
+          retention-days: 7
+
+      - name: Wall minutes
+        if: always()
+        run: echo "build: $(( ($(date +%s) - T0) / 60 )) min" >> "$GITHUB_STEP_SUMMARY"
+
+  # ---- draft PR: the short subset
+  smoke:
+    name: Emulator smoke (draft PR)
+    needs: build
+    if: github.event_name == 'pull_request' && github.event.pull_request.draft == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-apks
+          path: dist-e2e
+      - name: Grant KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Smoke on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash e2e/run-e2e.sh smoke
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Emulator smoke (draft PR)"
+            echo "wall minutes: $(( ($(date +%s) - T0) / 60 ))"
+            echo '```'; tail -n 25 e2e-out/instrumented-output.txt 2>/dev/null; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: e2e-smoke-out
+          path: e2e-out/
+          retention-days: 7
+
+  # ---- ready PR / push to mnaseb-sim: the whole flow
+  full:
+    name: Emulator full flow (API 33)
+    needs: build
+    if: >
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-apks
+          path: dist-e2e
+      - name: Grant KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Full flow on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 33
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash e2e/run-e2e.sh full
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Emulator full flow (API 33)"
+            echo "wall minutes: $(( ($(date +%s) - T0) / 60 ))"
+            echo "quarantined: $(bash e2e/quarantine.sh || true)"
+            echo '```'; tail -n 40 e2e-out/instrumented-output.txt 2>/dev/null; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: e2e-full-out
+          path: e2e-out/
+          retention-days: 7
+
+  # ---- Direct Boot (CARD-21): PIN, reboot, no unlock
+  direct-boot:
+    name: Direct Boot (API 30, FBE + PIN)
+    needs: build
+    if: >
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-apks
+          path: dist-e2e
+      - name: Grant KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Direct Boot on the emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash e2e/direct-boot.sh
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Direct Boot (CARD-21 A1, A2, A3, A4, A6 observed, A8)"
+            echo "wall minutes: $(( ($(date +%s) - T0) / 60 ))"
+            cat e2e-out/direct-boot-report.md 2>/dev/null
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: e2e-direct-boot-out
+          path: e2e-out/
+          retention-days: 7
+
+  # ---- Play Protect observation: INFORMATION ONLY, never blocks
+  play-protect:
+    name: Play Protect observation (API 34, Google Play image)
+    needs: build
+    continue-on-error: true
+    if: >
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-apks
+          path: dist-e2e
+      - name: Grant KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Sideload on a Google Play image
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          target: google_apis_playstore
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash e2e/play-protect.sh
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Play Protect observation (information only)"
+            echo "wall minutes: $(( ($(date +%s) - T0) / 60 ))"
+            cat e2e-out/play-protect-report.md 2>/dev/null
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: e2e-play-protect-out
+          path: e2e-out/
+          retention-days: 7
+
+  # ---- wall minutes of every job of this run, for the cost record
+  minutes:
+    name: CI minutes of this run
+    needs: [build, smoke, full, direct-boot, play-protect]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Job durations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "### Wall minutes per job"
+            echo "| job | result | minutes |"
+            echo "|---|---|---|"
+            gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}/jobs?per_page=100" --jq '
+              .jobs[] | select(.name != "CI minutes of this run" and .completed_at != null and .started_at != null)
+              | [.name, (.conclusion // "n/a"),
+                 (((.completed_at | fromdateiso8601) - (.started_at | fromdateiso8601)) / 60 | floor | tostring)]
+              | "| " + join(" | ") + " |"'
+          } >> "$GITHUB_STEP_SUMMARY"

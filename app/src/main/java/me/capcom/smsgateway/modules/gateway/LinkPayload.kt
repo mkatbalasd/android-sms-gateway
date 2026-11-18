@@ -86,6 +86,8 @@ object LinkPayload {
     }
 
     private fun isAllowedServer(server: String, allowedServer: String): Boolean {
+        // emulatorE2e only: the e2e stub's gateway URL. Always false in every other build type.
+        if (me.capcom.smsgateway.e2e.E2eOverride.isStubServer(server)) return true
         val uri = try {
             URI(server)
         } catch (e: Exception) {
