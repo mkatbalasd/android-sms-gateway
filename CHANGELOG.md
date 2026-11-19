@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+- Mnaseb SIM: the explicit platform-phone role (a phone that keeps replies with no line list) now comes only from the server's webhook pull, as a marker webhook for this device (event `system:ping`, url query exactly `mnaseb_role=platform_phone`). The local server (`PATCH /settings`, `POST /webhooks`) and settings imports can no longer open it; a failed pull keeps the last value and a pull without the marker closes it. A customer phone still fails closed.
+
 ## [0.3.0] - not tagged yet (the owner tags `mnaseb-sim-v0.3.0`)
 
 ### Added
