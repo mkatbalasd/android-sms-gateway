@@ -1,0 +1,8 @@
+# Quarantine list for the emulator e2e suite (.github/workflows/emulator-e2e.yml).
+# One fully qualified test class per line; the runner passes them as `-e notClass a,b,c`.
+# Columns, separated by " | ":   test | root cause | ROADMAP row
+# A quarantined test is NOT deleted or weakened: it stays in the tree, is skipped in CI, and
+# needs a root cause and a ROADMAP row to come back. Lines starting with # are ignored.
+#
+# test | root cause | ROADMAP row
+me.capcom.smsgateway.e2e.E2eOneReportPerTapTest | App posts the identical final state twice for one message (two PATCH /message about 10 ms apart; every MessageStateChangedEvent is logged twice and two SendStateWorker runs follow, CI run 44431177515; cause in the app not yet traced). A double SMS for one message id is checked by E2eGatewayTest t03 only through the emulator telephony log line, not a radio capture; the real-device check stays open | V2-L47

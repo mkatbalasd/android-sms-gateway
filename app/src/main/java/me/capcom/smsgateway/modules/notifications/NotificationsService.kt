@@ -66,20 +66,20 @@ class NotificationsService(
         contentText: String,
         contentIntent: PendingIntent? = null
     ): Notification {
+        // Before the first unlock (Direct Boot) MainActivity is not direct-boot aware, so the
+        // launch intent does not resolve and is null: no tap target then, never a crash
+        // (PendingIntent.getActivity(null intent) threw and killed SSEForegroundService).
+        val tapTarget = contentIntent ?: (
+            contentIntentFactories[id]?.invoke(context)
+                ?: context.packageManager.getLaunchIntentForPackage(context.packageName)
+            )?.let {
+            PendingIntent.getActivity(context, 0, it, PendingIntent.FLAG_IMMUTABLE)
+        }
         return NotificationCompat.Builder(context, NOTIFICATION_CHANNEL_ID)
             .setContentTitle(context.getText(R.string.sms_gateway))
             .setContentText(contentText)
             .setSmallIcon(icons[id] ?: R.drawable.ic_sms)
-            .setContentIntent(
-                contentIntent
-                    ?: PendingIntent.getActivity(
-                        context,
-                        0,
-                        contentIntentFactories[id]?.invoke(context)
-                            ?: context.packageManager.getLaunchIntentForPackage(context.packageName),
-                        PendingIntent.FLAG_IMMUTABLE
-                    )
-            )
+            .apply { if (tapTarget != null) setContentIntent(tapTarget) }
             .apply { builders[id]?.invoke(this) }
             .build()
     }

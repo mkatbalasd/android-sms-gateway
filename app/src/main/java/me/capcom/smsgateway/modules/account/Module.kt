@@ -15,7 +15,8 @@ import org.koin.dsl.module
 val accountModule = module {
     // One encrypted store, opened once.
     single { AccountSettings(AccountStorageFactory.create(get<Context>())) }
-    single { AccountApi() }
+    // Endpoints.accountBase is DEFAULT_BASE_URL in every build except emulatorE2e.
+    single { AccountApi(baseUrl = me.capcom.smsgateway.e2e.Endpoints.accountBase) }
     single<AccountBackend> { get<AccountApi>() }
     single<AppBackend> { get<AccountApi>() }
     single<PasswordResetBackend> { get<AccountApi>() }

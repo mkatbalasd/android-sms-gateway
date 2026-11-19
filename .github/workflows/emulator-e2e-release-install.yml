@@ -1,0 +1,102 @@
+name: Emulator E2E - release APK install
+
+# Optional follow-on to "Mnaseb SIM Release" (a tag build). Proves, on an emulator, that the
+# RELEASE-SIGNED APK attached to the GitHub release installs and opens its first screen.
+# The release keystore never leaves that workflow, so this job uses no secret at all: it
+# downloads the public release asset with the default read-only token and only verifies it.
+#
+# It runs the release build as shipped (production URLs, no stub), so it asserts only what is
+# real without a platform: signature verifies and is not the debug key, SHA-256 matches the
+# published .sha256, `pm install` succeeds, the welcome screen shows. The sign-up flow is
+# covered by emulator-e2e.yml with the debug-signed e2e build.
+#
+# A GITHUB_TOKEN-created release does not trigger `release:` workflows, so this listens for the
+# completion of the release workflow instead (workflow_run, tag runs only). workflow_run
+# workflows are read from the default branch: if the fork's default branch does not contain this
+# file, start it by hand with workflow_dispatch and the tag.
+# NOT a required check; a failure is reported, never re-run to green.
+
+on:
+  workflow_run:
+    workflows: ["Mnaseb SIM Release"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag, e.g. mnaseb-sim-v0.4.0"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  install-release:
+    name: Install the release-signed APK
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'mnaseb-sim-v'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Download the release asset and its checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.event.workflow_run.head_branch }}
+        run: |
+          set -euo pipefail
+          mkdir -p dl
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dl --pattern 'mnaseb-sim-*.apk' --pattern 'mnaseb-sim-*.sha256'
+          ls -l dl
+          APK=$(ls dl/mnaseb-sim-*.apk | grep -v unsigned | head -1)
+          test -n "$APK" || { echo "::error::no signed APK on release $TAG (an unsigned build is not installable)"; exit 1; }
+          echo "APK=$APK" >> "$GITHUB_ENV"
+          (cd dl && sha256sum -c "$(basename "$APK").sha256")
+
+      # Same pinned-certificate gate as the release workflow (a public value, not a secret).
+      - name: Verify the signature equals the pinned Mnaseb certificate
+        env:
+          PINNED_CERT_SHA256: "05f3a9e7b96c8306ce46c3312379d0713f5f92aca9b1a9f62492fab3a286f3e2"
+        run: |
+          set -euo pipefail
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          export BUILD_TOOLS
+          "$BUILD_TOOLS/apksigner" verify --verbose "$APK" | grep -q "Verifies"
+          bash .github/scripts/check-pinned-cert.sh "$APK"
+
+      - name: Grant KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Install and open on the emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 34
+          target: google_apis
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash e2e/install-release.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Release-signed APK install"
+            echo "wall minutes: $(( ($(date +%s) - T0) / 60 ))"
+            cat e2e-out/install-release-report.md 2>/dev/null
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: e2e-release-install-out
+          path: e2e-out/
+          retention-days: 7
