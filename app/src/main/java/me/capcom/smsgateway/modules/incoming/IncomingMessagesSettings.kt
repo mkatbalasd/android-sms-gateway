@@ -58,6 +58,13 @@ class IncomingMessagesSettings(
         /** The server setting `incoming.platform_phone`: the explicit role of the platform phone. */
         const val PLATFORM_PHONE = "platform_phone"
 
+        /**
+         * rev-sim35-2 L7: the worker pulls the account's WHOLE settings answer. When it has no
+         * `incoming` section the role is closed (a deleted section must not leave it open).
+         * Only the full pull uses this; a partial update (local server) does not.
+         */
+        fun sectionMissing(fullSettings: Map<String, *>): Boolean = fullSettings["incoming"] !is Map<*, *>
+
         /** Only a real `true` (or the text "true") opens the role; everything else is closed. */
         fun parsePlatformPhone(value: Any?): Boolean =
             value == true || (value is String && value.trim().equals("true", ignoreCase = true))

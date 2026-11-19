@@ -29,13 +29,13 @@ class ActiveLineStore(
         null
     }
 
-    @Synchronized
-    fun record(slots: Set<Int>) {
+    fun record(slots: Set<Int>) = synchronized(LOCK) {
         try {
             prefs.edit().putString(KEY, encode(slots)).commit()
         } catch (e: Exception) {
             // the old value stays; the next fetch retries
         }
+        Unit
     }
 
     /** The explicit platform-phone role. Anything unreadable is "not the platform phone". */
@@ -58,8 +58,8 @@ class ActiveLineStore(
      * A known list also gets the slot, so the reply is still accepted once the window is over
      * and before the next fetch.
      */
-    @Synchronized // rev-sim35-1 L6: its read-modify-write must not overwrite a list recorded meanwhile
-    fun addSlot(slot: Int, windowMs: Long = DEFAULT_PROOF_WINDOW_MS) {
+    // rev-sim35-1 L6: its read-modify-write must not overwrite a list recorded meanwhile
+    fun addSlot(slot: Int, windowMs: Long = DEFAULT_PROOF_WINDOW_MS) = synchronized(LOCK) {
         val now = clock()
         try {
             val windows = withProof(parseProof(prefs.getString(KEY_PROOF, null)), slot, now + windowMs, now)
@@ -69,6 +69,7 @@ class ActiveLineStore(
         } catch (e: Exception) {
             // recording must never fail the caller; the next fetch lists the slot
         }
+        Unit
     }
 
     /** True when the SMS on [simNumber] is kept and forwarded. */
@@ -81,15 +82,22 @@ class ActiveLineStore(
         return IncomingSlotFilter.accept(simNumber, slots(), isPlatformPhone(), proof)
     }
 
-    fun clear() {
-        try {
-            prefs.edit().remove(KEY).remove(KEY_PROOF).remove(KEY_PLATFORM_PHONE).commit()
-        } catch (e: Exception) {
-            // nothing to do
-        }
-    }
+    fun clear() = clearFile(prefs)
 
     companion object {
+        /** One lock for every writer of the file, including the unlink clean-up (rev-sim35-2 L8). */
+        private val LOCK = Any()
+
+        /** Wipes list, proof windows and role from [prefs]; takes the same lock as record/addSlot. */
+        fun clearFile(prefs: SharedPreferences) = synchronized(LOCK) {
+            try {
+                prefs.edit().clear().commit()
+            } catch (e: Exception) {
+                // nothing stored that can be cleared
+            }
+            Unit
+        }
+
         const val FILE = "mnaseb_active_lines"
         private const val KEY = "slots"
         private const val KEY_PROOF = "proof"

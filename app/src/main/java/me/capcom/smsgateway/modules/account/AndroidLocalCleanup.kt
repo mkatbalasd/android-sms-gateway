@@ -71,7 +71,7 @@ class AndroidLocalCleanup(
                     .getSharedPreferences(
                         me.capcom.smsgateway.modules.retention.ActiveLineStore.FILE,
                         Context.MODE_PRIVATE
-                    ).edit().clear().commit()
+                    ).let { me.capcom.smsgateway.modules.retention.ActiveLineStore.clearFile(it) }
             } catch (e: Exception) {
                 // nothing stored that can be cleared
             }

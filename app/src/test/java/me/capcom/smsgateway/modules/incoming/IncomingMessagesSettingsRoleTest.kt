@@ -19,6 +19,14 @@ class IncomingMessagesSettingsRoleTest {
     private val settings = IncomingMessagesSettings(NoStorage()) { seen += it }
 
     @Test
+    fun aFullPullWithNoIncomingSectionIsDetected() {
+        assertTrue(IncomingMessagesSettings.sectionMissing(emptyMap<String, Any>()))
+        assertTrue(IncomingMessagesSettings.sectionMissing(mapOf("messages" to mapOf("x" to 1))))
+        assertTrue(IncomingMessagesSettings.sectionMissing(mapOf("incoming" to null)))
+        assertFalse(IncomingMessagesSettings.sectionMissing(mapOf("incoming" to mapOf("lifetime_days" to 3))))
+    }
+
+    @Test
     fun onlyARealTrueOpensTheRole() {
         assertTrue(IncomingMessagesSettings.parsePlatformPhone(true))
         assertTrue(IncomingMessagesSettings.parsePlatformPhone("true"))
