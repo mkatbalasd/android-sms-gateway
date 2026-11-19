@@ -33,12 +33,19 @@ val accountModule = module {
         )
     }
     single<AppClient> {
-        AppRepository(get<AppBackend>(), get<AccountRepository>()) { lines ->
-            // CARD-24: the slots that hold an active line; the receiver keeps only those
-            get<me.capcom.smsgateway.modules.retention.ActiveLineStore>().record(
-                me.capcom.smsgateway.modules.retention.IncomingSlotFilter.activeSlots(lines)
-            )
-        }
+        AppRepository(
+            get<AppBackend>(),
+            get<AccountRepository>(),
+            onLines = { lines ->
+                // CARD-24: the slots that hold a non-retired line; the receiver drops the rest
+                get<me.capcom.smsgateway.modules.retention.ActiveLineStore>().record(
+                    me.capcom.smsgateway.modules.retention.IncomingSlotFilter.activeSlots(lines)
+                )
+            },
+            onClaim = { slot ->
+                get<me.capcom.smsgateway.modules.retention.ActiveLineStore>().addSlot(slot)
+            },
+        )
     }
     // V2-L23 + CARD-21 round 7: the pause state lives in device-protected storage (readable
     // before the first unlock). AccountSettings is only the source of the one-time copy,

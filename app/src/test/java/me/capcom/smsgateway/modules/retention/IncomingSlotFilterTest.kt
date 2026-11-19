@@ -3,17 +3,22 @@ package me.capcom.smsgateway.modules.retention
 import me.capcom.smsgateway.modules.account.AppLine
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** CARD-24: only SMS on a slot holding an ACTIVE line of the account are kept and forwarded. */
+/**
+ * CARD-24: with a fetched list only SMS on a slot holding a non-retired line of this phone are
+ * kept; with no list (never fetched, no app session, gateway-only link, after an unlink) the
+ * filter fails open.
+ */
 class IncomingSlotFilterTest {
     private fun line(slot: Int?, status: String? = "ACTIVE", verifiedAt: String? = "2026-11-10T10:00:00Z") =
         AppLine(id = "l", slot = slot, msisdnMasked = null, status = status, method = null,
             strength = null, verifiedAt = verifiedAt)
 
     @Test
-    fun aSlotHoldingAnActiveLineIsAccepted() {
+    fun aSlotHoldingALineIsAccepted() {
         assertTrue(IncomingSlotFilter.accept(1, setOf(1)))
         assertTrue(IncomingSlotFilter.accept(2, setOf(1, 2)))
     }
@@ -24,33 +29,57 @@ class IncomingSlotFilterTest {
     }
 
     @Test
-    fun aMessageWithNoKnownSlotIsDropped() {
+    fun aMessageWithNoKnownSlotIsDroppedWhenAListExists() {
         assertFalse(IncomingSlotFilter.accept(null, setOf(1)))
     }
 
     @Test
-    fun withNoActiveLineKnownNothingIsKept() {
+    fun aFetchedListWithNoLineKeepsNothing() {
         assertFalse(IncomingSlotFilter.accept(1, emptySet()))
     }
 
     @Test
-    fun onlyVerifiedActiveLinesCountAsActive() {
-        val slots = IncomingSlotFilter.activeSlots(
-            listOf(
-                line(1),
-                line(2, status = "PENDING"),
-                line(3, verifiedAt = null),
-                line(null),
-            )
-        )
-        assertEquals(setOf(1), slots)
+    fun withNoListEverFetchedEverythingIsAcceptedAsBefore() {
+        assertTrue(IncomingSlotFilter.accept(1, null))
+        assertTrue(IncomingSlotFilter.accept(2, null))
+        assertTrue(IncomingSlotFilter.accept(null, null))
     }
 
     @Test
-    fun theStoredFormRoundTrips() {
-        assertEquals(setOf(1, 2), ActiveLineStore.decode(ActiveLineStore.encode(setOf(2, 1))))
-        assertEquals(emptySet<Int>(), ActiveLineStore.decode(ActiveLineStore.encode(emptySet())))
-        assertEquals(emptySet<Int>(), ActiveLineStore.decode(null))
+    fun activeAndPendingClaimsCountButRetiredDoesNot() {
+        val slots = IncomingSlotFilter.activeSlots(
+            listOf(
+                line(1),
+                line(2, status = "PENDING", verifiedAt = null),
+                line(3, status = "RETIRED"),
+                line(4, status = "retired"),
+                line(null),
+            )
+        )
+        assertEquals(setOf(1, 2), slots)
+    }
+
+    @Test
+    fun aPendingClaimSlotAcceptsItsProofReplies() {
+        val slots = IncomingSlotFilter.activeSlots(listOf(line(2, status = "PENDING", verifiedAt = null)))
+        assertTrue(IncomingSlotFilter.accept(2, slots))
+    }
+
+    @Test
+    fun startingAProofAddsTheSlotToAKnownList() {
+        assertEquals(setOf(1, 2), ActiveLineStore.withSlot(setOf(1), 2))
+    }
+
+    @Test
+    fun startingAProofDoesNotTurnAnUnknownListIntoARestrictiveOne() {
+        assertNull(ActiveLineStore.withSlot(null, 2))
+    }
+
+    @Test
+    fun theStoredFormRoundTripsAndNoValueMeansUnknown() {
+        assertEquals(setOf(1, 2), ActiveLineStore.parse(ActiveLineStore.encode(setOf(2, 1))))
+        assertEquals(emptySet<Int>(), ActiveLineStore.parse(ActiveLineStore.encode(emptySet())))
+        assertNull(ActiveLineStore.parse(null))
         assertEquals(setOf(1), ActiveLineStore.decode("1,x, ,"))
     }
 }

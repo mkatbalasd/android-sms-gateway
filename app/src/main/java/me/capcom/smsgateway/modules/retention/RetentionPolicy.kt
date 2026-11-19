@@ -111,11 +111,16 @@ object RetentionClock {
 
 /** Which incoming SMS are kept and forwarded: those on a slot holding an active line. */
 object IncomingSlotFilter {
-    /** [simNumber] is the 1-based SIM number the receiver derives; unknown (null) is never accepted. */
-    fun accept(simNumber: Int?, activeSlots: Set<Int>): Boolean =
-        simNumber != null && simNumber in activeSlots
+    /**
+     * [simNumber] is the 1-based SIM number the receiver derives. [knownSlots] null means the list
+     * was never fetched (no app session, gateway-only link): FAIL OPEN, everything is accepted as
+     * before CARD-24. With a list, a message on an unknown slot is dropped.
+     */
+    fun accept(simNumber: Int?, knownSlots: Set<Int>?): Boolean =
+        knownSlots == null || (simNumber != null && simNumber in knownSlots)
 
-    /** Slots of the lines the platform proved: active, with a verification time. */
+    /** Slots that hold a line of this phone that is not RETIRED (ACTIVE or a PENDING claim). */
     fun activeSlots(lines: List<AppLine>): Set<Int> =
-        lines.filter { it.isVerified }.mapNotNull { it.slot }.toSet()
+        lines.filter { !"RETIRED".equals(it.status, ignoreCase = true) }
+            .mapNotNull { it.slot }.toSet()
 }

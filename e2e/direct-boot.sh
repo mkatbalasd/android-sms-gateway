@@ -153,7 +153,7 @@ fi
 if de_pull; then
   # positive control: the recipient number is still stored (24h window not over), so the search can see it
   [ "$(de_hits "$NUM_OUT")" -gt 0 ] && pass "R1 control: the recipient number is still in device-protected storage inside its window" \
-    || info "R1 control: the recipient number was not found inside its window (the search may be blind)"
+    || fail "R1 control: the recipient number was not found inside its window (the search is blind)"
 else
   fail "R1 root read of device-protected storage failed (adb root or pull)"
 fi

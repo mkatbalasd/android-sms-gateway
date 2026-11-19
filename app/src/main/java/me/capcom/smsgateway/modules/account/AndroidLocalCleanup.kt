@@ -65,6 +65,16 @@ class AndroidLocalCleanup(
         withContext(Dispatchers.IO) {
             preferences.edit().also { editor -> LinkSecrets.forget { editor.remove(it) } }.commit()
             payloads.clearAll()
+            // CARD-24: the old link's line slots; with none stored the receiver fails open again
+            try {
+                me.capcom.smsgateway.helpers.DeviceStorage.deContext(appContext)
+                    .getSharedPreferences(
+                        me.capcom.smsgateway.modules.retention.ActiveLineStore.FILE,
+                        Context.MODE_PRIVATE
+                    ).edit().clear().commit()
+            } catch (e: Exception) {
+                // nothing stored that can be cleared
+            }
 
             // ...and from the credential-encrypted rollback copy of the preferences (same file
             // name, left in place by the migration). Unlinking happens unlocked; if it somehow

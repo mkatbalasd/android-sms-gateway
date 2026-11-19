@@ -34,6 +34,12 @@ class MessageWithoutRecipientsTest {
     }
 
     @Test
+    fun aPendingMessageWithoutRecipientsStillReadsAsFailed() {
+        val row = MessageWithRecipients(message(ProcessingState.Pending), emptyList())
+        assertEquals(ProcessingState.Failed, row.state)
+    }
+
+    @Test
     fun recipientsStillDecideWhenThereAreSome() {
         val row = MessageWithRecipients(
             message(ProcessingState.Sent),

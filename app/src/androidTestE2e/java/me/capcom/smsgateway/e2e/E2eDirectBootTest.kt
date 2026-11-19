@@ -51,7 +51,7 @@ class E2eDirectBootTest {
         // phone must know the slots before the reboot (the host script seeded slot 1 on the stub)
         val lines = koin<ActiveLineStore>()
         runBlocking { koin<RetentionService>().refreshActiveLines() }
-        E2e.waitFor("the active line slots to be known") { 1 in lines.slots() }
+        E2e.waitFor("the active line slots to be known") { lines.slots()?.contains(1) == true }
     }
 
     /**
@@ -67,7 +67,7 @@ class E2eDirectBootTest {
         assertNotNull("the message row (the repeat guard) exists", row)
         assertEquals("the text was deleted at the final state", "", row!!.message.textContent?.text)
         assertTrue("the recipient is still inside its window", row.recipients.isNotEmpty())
-        assertEquals("the inbound SMS reached only a known line", false, activeLineSlots().isEmpty())
+        assertEquals("the inbound SMS reached only a known line", false, activeLineSlots().isNullOrEmpty())
 
         // a fresh install has no CARD-21 rollback copies, so plant the ones an upgraded phone
         // has (credential-encrypted storage, the old file names); the next step must remove them
@@ -151,7 +151,7 @@ class E2eDirectBootTest {
         throw IllegalStateException()
     }
 
-    private fun activeLineSlots(): Set<Int> = koin<ActiveLineStore>().slots()
+    private fun activeLineSlots(): Set<Int>? = koin<ActiveLineStore>().slots()
 
     private inline fun <reified T : Any> koin(): T = GlobalContext.get().get()
 
