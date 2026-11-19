@@ -5,3 +5,4 @@
 # needs a root cause and a ROADMAP row to come back. Lines starting with # are ignored.
 #
 # test | root cause | ROADMAP row
+me.capcom.smsgateway.e2e.E2eOneReportPerTapTest | App posts the identical final state twice for one message (two PATCH /message ~10 ms apart, CI run 44431177515); one SMS is sent (one id, one send time, proven by E2eGatewayTest). Duplicate state report in the app, not a double send | V2-L47

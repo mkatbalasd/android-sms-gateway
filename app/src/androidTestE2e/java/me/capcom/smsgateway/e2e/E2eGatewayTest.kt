@@ -103,7 +103,20 @@ class E2eGatewayTest {
 
         E2e.waitFor("the phone to report the message as Sent") { reportsFor(id, "Sent") >= 1 }
         SystemClock.sleep(settleMs)
-        assertEquals("one Sent report for one tap", 1, reportsFor(id, "Sent"))
+        // Ground truth of the SMS itself: the app stamps `Sent` with the time of the send, so a
+        // second send would show as another distinct Sent time (or another message id). The strict
+        // "one Sent REPORT" form is E2eOneReportPerTapTest (the app posts the same final state twice).
+        val reports = E2e.stub().getJSONArray("messageReports")
+        val ids = HashSet<String>()
+        val sendTimes = HashSet<String>()
+        for (i in 0 until reports.length()) {
+            val r = reports.getJSONObject(i)
+            if (r.optString("id") != id) continue
+            ids.add(r.getString("id"))
+            r.optJSONObject("states")?.optString("Sent")?.takeIf { it.isNotEmpty() }?.let { sendTimes.add(it) }
+        }
+        assertEquals("one message id for one tap", 1, ids.size)
+        assertEquals("one send time (one SMS) for one tap", 1, sendTimes.size)
         assertEquals(
             "still one test-message POST after the settle window",
             postsBefore + 1, E2e.stub().getJSONArray("testMessagePosts").length()
