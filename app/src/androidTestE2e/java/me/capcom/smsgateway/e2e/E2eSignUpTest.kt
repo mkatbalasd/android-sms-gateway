@@ -41,9 +41,13 @@ class E2eSignUpTest {
     @Test
     fun t02_theNationalNumberIsNeverPrefilledFromTheSim() {
         E2e.startSignUpAndGrant()
-        // Whatever country the SIM preselects, the number field itself starts empty.
-        assertEquals("", E2e.need("editIntlNational").text.orEmpty())
-        assertEquals("", E2e.need("editBusinessName").text.orEmpty())
+        // Whatever country the SIM preselects, the number field must not carry a number. An
+        // empty EditText reports its hint ("Mobile number") as its text to UI Automator, so the
+        // assertion is that no digit of any script is present, which is what a SIM prefill would be.
+        val national = E2e.need("editIntlNational").text.orEmpty()
+        assertFalse("the national number field was prefilled", national.any { it.isDigit() })
+        val name = E2e.need("editBusinessName").text.orEmpty()
+        assertFalse("the business name field was prefilled with digits", name.any { it.isDigit() })
     }
 
     @Test
