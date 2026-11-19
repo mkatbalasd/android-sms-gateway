@@ -105,6 +105,13 @@ jobs:
           app/build/outputs/apk/release/app-release-unsigned.apk
           app/build/outputs/apk/sendOnly/app-sendOnly-unsigned.apk
 
+      # The e2e send-only APK (what the emulator job installs) must be clean too.
+      - name: Send-only guard on the e2e APK
+        run: >
+          bash e2e/send-only-guard.sh
+          app/build/outputs/apk/release/app-release-unsigned.apk
+          app/build/outputs/apk/sendOnlyE2e/app-sendOnlyE2e.apk
+
       # T2 on the send-only release type too: no stub override, production URLs.
       - name: Release guard on the send-only APK
         run: >

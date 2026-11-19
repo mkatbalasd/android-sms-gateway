@@ -104,7 +104,7 @@ android {
         emulatorE2e.java.srcDir 'src/e2eOn/java'
         sendOnly.java.srcDir 'src/e2eOff/java'
         sendOnlyE2e.java.srcDir 'src/e2eOn/java'
-        sendOnlyE2e.manifest.srcFile 'src/sendOnly/AndroidManifest.xml'
+        // sendOnlyE2e uses src/sendOnlyE2e/AndroidManifest.xml (a copy of src/sendOnly's overlay)
         // The emulator e2e tests only exist for -Pe2eBuildType=emulatorE2e, so the existing
         // Instrumented Tests job (debug build, production URLs) never compiles or runs them.
         if (project.findProperty('e2eBuildType') in ['emulatorE2e', 'sendOnlyE2e']) {
