@@ -13,6 +13,16 @@ object E2eOverride {
 
     val stubBase: String? = STUB_BASE
 
+    /**
+     * CARD-24 time-shift hook, emulatorE2e only: the instrumented test moves the RETENTION clock
+     * forward (never the system clock) to prove the 24h/72h windows on a CI emulator. The marker
+     * below is grepped for by the release guard, like [MARKER].
+     */
+    const val RETENTION_SHIFT_MARKER = "E2E_RETENTION_CLOCK_SHIFT_ACTIVE"
+
+    @Volatile
+    var retentionShiftMs: Long = 0L
+
     /** The stub's gateway URL is the only non-https server a link payload may name here. */
     fun isStubServer(server: String): Boolean =
         server.trimEnd('/') == "$STUB_BASE/api/mobile/v1"

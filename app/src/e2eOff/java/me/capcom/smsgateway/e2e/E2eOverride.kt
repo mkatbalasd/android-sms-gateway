@@ -11,6 +11,9 @@ object E2eOverride {
     /** Always null: no override exists in this build. */
     val stubBase: String? = null
 
+    /** Always 0: the retention clock is the real clock (CARD-24); only the e2e build can shift it. */
+    val retentionShiftMs: Long = 0L
+
     /** Always false: this build only accepts the built-in server in a link payload. */
     fun isStubServer(server: String): Boolean = false
 }
