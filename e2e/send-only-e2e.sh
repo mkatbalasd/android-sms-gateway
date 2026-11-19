@@ -12,8 +12,10 @@
 set -uo pipefail
 
 OUT=${E2E_OUT:-e2e-out}
-APK=${E2E_APK:-dist-e2e/app-sendOnlyE2e.apk}
-TEST_APK=${E2E_TEST_APK:-dist-e2e/app-sendOnlyE2e-androidTest.apk}
+# Not E2E_APK / E2E_TEST_APK: the workflow sets those to the TWO-WAY e2e build.
+APK=${SEND_ONLY_APK:-dist-e2e/app-sendOnlyE2e.apk}
+TEST_APK=${SEND_ONLY_TEST_APK:-dist-e2e/app-sendOnlyE2e-androidTest.apk}
+case "$APK" in *sendOnly*) ;; *) echo "refusing: $APK is not the send-only APK"; exit 1 ;; esac
 PKG=com.mnaseb.sim.e2e
 RUNNER=$PKG.test/androidx.test.runner.AndroidJUnitRunner
 FORBIDDEN="android.permission.RECEIVE_SMS android.permission.READ_SMS android.permission.RECEIVE_MMS android.permission.RECEIVE_WAP_PUSH"
