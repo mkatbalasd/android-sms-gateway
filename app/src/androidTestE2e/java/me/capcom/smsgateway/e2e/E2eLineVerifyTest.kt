@@ -38,6 +38,6 @@ class E2eLineVerifyTest {
         E2e.waitFor("the platform to receive POST /app/lines/verify") {
             E2e.stub().getJSONArray("lines").length() == 1
         }
-        assertEquals("one line proven for one tap", 1, E2e.stub().getJSONArray("lines").length())
+        assertEquals("one POST /app/lines/verify reached the stub for one tap (the stub activates the line itself; no MO SMS is matched)", 1, E2e.stub().getJSONArray("lines").length())
     }
 }

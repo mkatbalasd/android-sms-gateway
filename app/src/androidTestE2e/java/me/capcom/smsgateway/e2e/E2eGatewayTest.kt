@@ -12,8 +12,11 @@ import org.junit.runners.MethodSorters
 
 /**
  * The linked phone against the stub gateway: an inbound SMS (fired through the emulator console
- * by e2e/sms-watcher.sh), pause and resume (V2-L23), and one tap of "send test message" ->
- * exactly one SMS reported.
+ * by e2e/sms-watcher.sh) reaching the stub inbox once, pause and resume (V2-L23), and one tap of
+ * "send test message": one test-message POST, the message reported `Sent` at least once, and one
+ * submission of that message's destination in the emulator's telephony log. The strict
+ * "one Sent report" check is E2eOneReportPerTapTest (quarantined, V2-L47). A double SMS for one
+ * message id is only covered by that telephony-log line, not by a radio capture.
  */
 @E2eFull
 @FixMethodOrder(MethodSorters.NAME_ASCENDING)
@@ -22,6 +25,9 @@ class E2eGatewayTest {
 
     /** Idle window in which a duplicate send would have shown up; a negative assertion needs one. */
     private val settleMs = 15_000L
+
+    /** Where the stub addresses a test message (server.js, POST /app/test-message). */
+    private val STUB_TEST_DESTINATION = "+15550000000"
 
     private fun reportsFor(id: String, state: String): Int {
         val reports: JSONArray = E2e.stub().getJSONArray("messageReports")
@@ -106,13 +112,18 @@ class E2eGatewayTest {
         SystemClock.sleep(settleMs)
         // Ground truth of the SMS itself, outside the app's state table (the app's per-state rows
         // keep the FIRST Sent time on a repeat, so they cannot see a second send): the telephony
-        // stack logs one submission line per outgoing SMS. At least one proves the check can see
-        // the send; no destination may appear twice (a second send of the same message goes to the
-        // same recipient). Caveat: this is an emulator log line, not a radio capture, and the
-        // dialer's voicemail probe is another destination that must also appear once.
+        // stack logs one submission line per outgoing SMS, with the destination as the URL-safe
+        // base64 SHA-1 of the number string (checked against CI evidence: sha1("+15550000000")
+        // equals the hash logged for the test send). The stub addresses the test message to that
+        // number, so exactly one line for that hash means one submission of this message. Caveat:
+        // an emulator log line, not a radio capture; it does not see a double send that bypasses
+        // SmsNumberUtils.
+        val testDest = E2e.telephonyDestHash(STUB_TEST_DESTINATION)
         val submissions = E2e.radioSubmissionsSince(sinceTap)
-        assertTrue("no SMS submission seen in the telephony log since the tap", submissions.isNotEmpty())
-        submissions.forEach { (dest, n) -> assertEquals("destination $dest submitted $n times for one tap", 1, n) }
+        assertEquals(
+            "submissions of the test message's destination since the tap (all seen: $submissions)",
+            1, submissions[testDest] ?: 0
+        )
         assertEquals(
             "still one test-message POST after the settle window",
             postsBefore + 1, E2e.stub().getJSONArray("testMessagePosts").length()

@@ -163,6 +163,12 @@ object E2e {
      * Other senders on the emulator (the dialer's voicemail probe) show up as their own hash.
      * Needs the shell user to read logcat, which UiDevice.executeShellCommand is.
      */
+    /** The hash the telephony log prints for a destination: URL-safe base64 of SHA-1, no padding. */
+    fun telephonyDestHash(number: String): String = android.util.Base64.encodeToString(
+        java.security.MessageDigest.getInstance("SHA-1").digest(number.toByteArray()),
+        android.util.Base64.URL_SAFE or android.util.Base64.NO_PADDING or android.util.Base64.NO_WRAP
+    )
+
     fun radioSubmissionsSince(since: String): Map<String, Int> {
         val out = device.executeShellCommand("logcat -b all -d -s SmsNumberUtils")
         val counts = HashMap<String, Int>()

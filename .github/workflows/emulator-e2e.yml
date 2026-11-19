@@ -2,7 +2,7 @@ name: Emulator E2E
 
 # Mnaseb SIM fork: the app on an Android emulator against a dependency-free STUB of the platform
 # (e2e/stub-server). The stub is used because the platform's private images cannot be pulled by
-# this public fork's runners. See e2e/README.md for what is proven in simulation and what only a
+# this public fork's runners. See e2e/README.md for what is covered in simulation and what only a
 # real phone can prove.
 #
 # COST GUARD

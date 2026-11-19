@@ -54,8 +54,9 @@ The e2e APK installs as `com.mnaseb.sim.e2e` (`applicationIdSuffix`), so it neve
 | `E2eSmokeTest` | Stub reachable via `10.0.2.2`; welcome screen; create opens permissions or form |
 | `E2eSignUpTest` | Permission screen state is real (`AccountPermissions.missing`) and the system dialogs grant it; the national number is never prefilled; sign-up -> code -> enrolment -> linked, with the stub seeing the nonce-suffixed name, a public key and `enrolment/complete`; the linked phone holds an SSE stream and a heartbeat |
 | `E2eLineVerifyTest` | Ticking the SIM and tapping verify makes the app call `POST /app/lines/verify` |
-| `E2eGatewayTest` | An inbound SMS fired with `adb emu sms send` (by `sms-watcher.sh`, the console is host-side) is reported once on `/inbox`; pause closes the stream and posts `device/pause`, resume reopens it; **one tap on send test message -> one test-message POST -> one `Sent` report** after a settle window |
-| `direct-boot.sh` | CARD-21 A1 (FBE), A2 (`ce_available` not true after reboot), A3 (`SSEForegroundService` running, new SSE connection and heartbeat at the stub while locked), A4 (a message pushed over SSE is sent and reported `Sent` while locked), A6 (observed, see below), A8 (jobs present after unlock, no duplicate `Sent`, link intact) |
+| `E2eGatewayTest` | An inbound SMS fired with `adb emu sms send` (by `sms-watcher.sh`, the console is host-side) reaches `/inbox` once (passphrase-encrypted); pause closes the stream and posts `device/pause`, resume reopens it; one tap on send test message gives one test-message POST, the message reported `Sent` at least once, and exactly one submission of that message's destination in the emulator's telephony log (an emulator log line, not a radio capture) |
+| `E2eOneReportPerTapTest` | Strict form: one tap gives exactly one `Sent` state report. **Quarantined (V2-L47)**: the app posts the identical final state twice |
+| `direct-boot.sh` | CARD-21 A1 (FBE), A2 (`ce_available` not true after reboot), A3 (`SSEForegroundService` running, new SSE connection and heartbeat at the stub while locked), A4 (a message pushed over SSE is sent and reported `Sent` while locked), A6 (observed, see below), A8 (jobs present after unlock, no message id with two `Sent` reports, link intact) |
 | `play-protect.sh` | Information only: what the Google Play image does with the sideloaded APK (screenshots, uiautomator dumps, filtered logcat) |
 
 ## What an emulator cannot prove (real device only)
@@ -63,6 +64,7 @@ The e2e APK installs as `com.mnaseb.sim.e2e` (`applicationIdSuffix`), so it neve
 - **A5** E2E-encrypted message while locked: the stub has no encryption flow (Keystore use before unlock is only proven on a phone).
 - **A6** the carrier-side hold: on a phone Android withholds `SMS_RECEIVED` until unlock (I-1). The emulator may deliver earlier; `direct-boot.sh` records which it did as INFO and only asserts "exactly once after unlock".
 - **A7** 15 minutes locked on a real network, Doze, data usage.
+- **Double SMS for one message id** and the **duplicate final-state `PATCH /message`** (V2-L47): the emulator suite does not exclude a double radio send (it only reads one telephony log line) and the duplicate report is quarantined, not fixed; both need a real-device check.
 - OEM battery and autostart paths (HyperOS, EMUI), SIM and carrier behaviour, real delivery reports (A4 asserts the `Sent` report; `Delivered` needs a network).
 - Play Protect's cloud verdict (depends on signature, account, region): the Play image run is observation only. The real answer is CARD-18 item 1 on the customer phone.
 - Any platform behaviour the stub does not copy.
