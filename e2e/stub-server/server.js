@@ -252,10 +252,7 @@ function sse(req, res) {
   res.write(': connected\n\n');
   sseClients.add(res);
   // Tell the phone to re-read /settings (as the server does when settings change).
-  res.write('event: SettingsUpdated
-data: {}
-
-');
+  res.write('event: SettingsUpdated\ndata: {}\n\n');
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
   req.on('close', () => { clearInterval(ping); sseClients.delete(res); S.sse.open--; });
 }
