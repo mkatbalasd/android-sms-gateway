@@ -13,7 +13,7 @@ import android.content.SharedPreferences
  *  - the number-proof window: a proof was started on a slot, so its reply is accepted for a
  *    short, bounded time even before any list arrived.
  *  - [isPlatformPhone]: the explicit role of the platform phone, set only from a server setting
- *    (see IncomingMessagesSettings). DEFAULT CLOSED (false). It is never inferred from a
+ *    (see IncomingMessagesSettings; it is per gateway account, not per device). DEFAULT CLOSED (false). It is never inferred from a
  *    missing list.
  *
  * A CUSTOMER phone FAILS CLOSED: with no list, only an open proof window accepts. A list that
@@ -29,6 +29,7 @@ class ActiveLineStore(
         null
     }
 
+    @Synchronized
     fun record(slots: Set<Int>) {
         try {
             prefs.edit().putString(KEY, encode(slots)).commit()
@@ -57,6 +58,7 @@ class ActiveLineStore(
      * A known list also gets the slot, so the reply is still accepted once the window is over
      * and before the next fetch.
      */
+    @Synchronized // rev-sim35-1 L6: its read-modify-write must not overwrite a list recorded meanwhile
     fun addSlot(slot: Int, windowMs: Long = DEFAULT_PROOF_WINDOW_MS) {
         val now = clock()
         try {

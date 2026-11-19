@@ -30,9 +30,10 @@ class IncomingMessagesSettingsRoleTest {
     }
 
     @Test
-    fun theServerSettingReachesTheStoreHookAndAnAbsentKeyDoesNot() {
+    fun anAbsentKeyClosesTheRoleAndTheServerSettingReachesTheStoreHook() {
         settings.import(mapOf("lifetime_days" to null))
-        assertEquals(emptyList<Boolean>(), seen)
+        assertEquals(listOf(false), seen)
+        seen.clear()
 
         settings.import(mapOf(IncomingMessagesSettings.PLATFORM_PHONE to true))
         settings.import(mapOf(IncomingMessagesSettings.PLATFORM_PHONE to false))

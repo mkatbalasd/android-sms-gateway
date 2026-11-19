@@ -35,6 +35,14 @@ class E2eFailClosedTest {
             it.getInt(0)
         }
 
+    private fun dropLogRows(): Int =
+        koin<AppDatabase>().openHelper.readableDatabase
+            .query("SELECT COUNT(*) FROM logs_entries WHERE message LIKE '%dropped, the SIM slot holds no active line%'")
+            .use {
+                it.moveToFirst()
+                it.getInt(0)
+            }
+
     private fun uploadRows(): Int =
         koin<AppDatabase>().openHelper.readableDatabase.query("SELECT COUNT(*) FROM gateway__inbox_upload").use {
             it.moveToFirst()
@@ -58,7 +66,11 @@ class E2eFailClosedTest {
             val storedBefore = incomingRows()
             val uploadsBefore = uploadRows()
 
+            val dropsBefore = dropLogRows()
             StubControl.requestInboundSms("5551234", "e2e personal sim ${SystemClock.elapsedRealtime()}")
+            // the SMS must have reached the app and been dropped by the filter (one more drop
+            // row, a count only), not lost on the way
+            E2e.waitFor("the filter to drop the SMS") { dropLogRows() > dropsBefore }
             SystemClock.sleep(settleMs) // the idle window of a negative assertion
 
             assertEquals("nothing was forwarded", inboxBefore, E2e.stub().getJSONArray("inbox").length())

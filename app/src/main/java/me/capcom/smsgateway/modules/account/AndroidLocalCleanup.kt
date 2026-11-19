@@ -65,7 +65,7 @@ class AndroidLocalCleanup(
         withContext(Dispatchers.IO) {
             preferences.edit().also { editor -> LinkSecrets.forget { editor.remove(it) } }.commit()
             payloads.clearAll()
-            // CARD-24: the old link's line slots; with none stored the receiver fails open again
+            // CARD-24: the old link's line slots; with none stored (and the platform-phone role reset) the receiver fails closed again
             try {
                 me.capcom.smsgateway.helpers.DeviceStorage.deContext(appContext)
                     .getSharedPreferences(

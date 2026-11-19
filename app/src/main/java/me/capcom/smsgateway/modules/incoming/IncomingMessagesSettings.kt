@@ -9,7 +9,8 @@ class IncomingMessagesSettings(
     private val storage: KeyValueStorage,
     /**
      * CARD-24: the explicit platform-phone role, applied to the device-protected store the
-     * receiver reads. Called only for a `platform_phone` key the server sent.
+     * receiver reads. Called with the parsed `platform_phone` value, and with false when the
+     * `incoming` answer has no such key. The role is per GATEWAY ACCOUNT, not per device.
      */
     private val onPlatformPhone: (Boolean) -> Unit = {},
 ) : Exporter, Importer {
@@ -23,6 +24,9 @@ class IncomingMessagesSettings(
     }
 
     override fun import(data: Map<String, *>): Boolean {
+        // rev-sim35-1 L1: an answer without the key is "not the platform phone": an account that
+        // stops sending `true` closes the role again (the role is never left open by silence)
+        if (PLATFORM_PHONE !in data) onPlatformPhone(false)
         return data.map { (key, value) ->
             when (key) {
                 LIFETIME_DAYS -> {
