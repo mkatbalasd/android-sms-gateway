@@ -85,8 +85,6 @@ data class ResetVerifyRequest(
     override fun toString() = "ResetVerifyRequest(redacted)"
 }
 
-data class ResetStartResponse(val accepted: Boolean?)
-
 data class ResetVerifyResponse(val success: Boolean?)
 
 data class LoginResendRequest(@SerializedName("login_id") val loginId: String)

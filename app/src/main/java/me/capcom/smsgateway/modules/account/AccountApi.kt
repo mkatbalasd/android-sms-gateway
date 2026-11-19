@@ -70,7 +70,7 @@ interface AppBackend {
 
 /**
  * The forgotten-password calls (V2-L33). They are the web reset of the platform on the app
- * host (`/api/auth/reset/*`), public: no token, no cookie. Same error contract as the rest.
+ * host (`/api/auth/reset/start` and `/api/auth/reset/verify`), public: no token, no cookie. Same error contract as the rest.
  */
 interface PasswordResetBackend {
     /** 202 for every number; throws [AccountException] for 429 (RESET_RATE_LIMIT) and 503. */

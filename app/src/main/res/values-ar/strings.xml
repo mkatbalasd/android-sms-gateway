@@ -299,6 +299,7 @@
     <string name="account_reset_done">تم تغيير كلمة المرور. سجّل الدخول بكلمة المرور الجديدة.</string>
     <string name="account_reset_err_code_length">أدخل الرمز المكوّن من ٦ أرقام</string>
     <string name="account_reset_err_password_short">يجب ألا تقل كلمة المرور عن ١٠ أحرف</string>
+    <string name="account_reset_err_password_long">يجب ألا تزيد كلمة المرور عن ١٢٨ حرفاً</string>
     <string name="account_reset_err_mismatch">كلمتا المرور غير متطابقتين</string>
     <string name="account_reset_err_password_rejected">كلمة المرور هذه غير مقبولة. اختر غيرها.</string>
     <string name="account_reset_err_code_rejected">الرمز غير صالح. تحقّق منه أو اطلب رمزاً جديداً.</string>

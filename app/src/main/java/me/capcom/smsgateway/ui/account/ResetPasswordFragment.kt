@@ -42,6 +42,9 @@ class ResetPasswordFragment : Fragment() {
         val viewModel = ViewModelProvider(requireActivity())[PasswordResetViewModel::class.java]
         val accountViewModel = ViewModelProvider(requireActivity())[AccountViewModel::class.java]
         val ctx = requireContext()
+        requireActivity().window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE
+        )
 
         // Only the country is preselected; the number is typed by the customer.
         if (savedInstanceState == null) binding.phoneReset.preselectDefault()
@@ -134,20 +137,10 @@ class ResetPasswordFragment : Fragment() {
         b.editResetConfirmPassword.setText("")
     }
 
-    override fun onResume() {
-        super.onResume()
-        // The code and the new password are never captured in screenshots or the recents list.
-        activity?.window?.setFlags(
-            WindowManager.LayoutParams.FLAG_SECURE, WindowManager.LayoutParams.FLAG_SECURE
-        )
-    }
-
-    override fun onPause() {
-        activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
-        super.onPause()
-    }
-
     override fun onDestroyView() {
+        // Set in onViewCreated and cleared only when the screen goes away, so the recents
+        // snapshot (taken after onPause) is blank too.
+        activity?.window?.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
         clearSecrets()
         super.onDestroyView()
         _binding = null

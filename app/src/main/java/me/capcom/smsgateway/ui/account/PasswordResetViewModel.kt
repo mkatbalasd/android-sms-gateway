@@ -20,6 +20,7 @@ object ResetMessages {
         ResetProblem.PHONE_INVALID -> R.string.intl_phone_error
         ResetProblem.CODE_LENGTH -> R.string.account_reset_err_code_length
         ResetProblem.PASSWORD_SHORT -> R.string.account_reset_err_password_short
+        ResetProblem.PASSWORD_LONG -> R.string.account_reset_err_password_long
         ResetProblem.PASSWORD_MISMATCH -> R.string.account_reset_err_mismatch
         ResetProblem.PASSWORD_REJECTED -> R.string.account_reset_err_password_rejected
         ResetProblem.CODE_REJECTED -> R.string.account_reset_err_code_rejected

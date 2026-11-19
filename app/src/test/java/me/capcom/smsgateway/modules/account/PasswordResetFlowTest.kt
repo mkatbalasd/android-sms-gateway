@@ -209,6 +209,23 @@ internal class PasswordResetFlowTest {
     }
 
     @Test
+    fun aRevocationFailureAfterTheChangeIsTheDonePath() = runBlocking {
+        started()
+        backend.verifyError = error("SESSION_REVOCATION_FAILED", 503)
+        assertNull(flow.submit("123456", password, password))
+        assertEquals(ResetState.Done, flow.state.value)
+        assertEquals(1, cleared)
+    }
+
+    @Test
+    fun aPasswordOver128IsRefusedOnTheDevice() = runBlocking {
+        started()
+        val long = "x".repeat(129)
+        assertEquals(ResetProblem.PASSWORD_LONG, flow.submit("123456", long, long)?.problem)
+        assertTrue(backend.verifies.isEmpty())
+    }
+
+    @Test
     fun theTenMinutesAreCountedOnThePhone() = runBlocking {
         started()
         clock += 600_000L

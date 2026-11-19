@@ -31,6 +31,7 @@ enum class ResetProblem {
     CODE_LENGTH,
     PASSWORD_SHORT,
     PASSWORD_MISMATCH,
+    PASSWORD_LONG,
 
     /** The server refused the password (validation); says nothing about the number. */
     PASSWORD_REJECTED,
@@ -130,6 +131,7 @@ class PasswordResetFlow(
         val code = OtpDigits.normalize(rawCode)
         if (code.length != CODE_LENGTH) return ResetFailure(ResetProblem.CODE_LENGTH)
         if (newPassword.length < MIN_PASSWORD) return ResetFailure(ResetProblem.PASSWORD_SHORT)
+        if (newPassword.length > MAX_PASSWORD) return ResetFailure(ResetProblem.PASSWORD_LONG)
         if (newPassword != confirm) return ResetFailure(ResetProblem.PASSWORD_MISMATCH)
         if (current.dead || now() >= current.expiresAtMs) {
             return ResetFailure(ResetProblem.CODE_EXPIRED)
@@ -139,12 +141,17 @@ class PasswordResetFlow(
         } catch (e: CancellationException) {
             throw e
         } catch (e: AccountException) {
-            val failure = failureOf(e.error, forVerify = true)
-            if (failure.problem == ResetProblem.CODE_REJECTED && ++wrongTries >= MAX_TRIES) {
-                // Five wrong tries kill the code on the server; offer a new one at once.
-                _state.value = current.copy(resendAtMs = now(), dead = true)
+            // The server changed the password but could not end every session (503): the
+            // password HAS changed, so this is the done path. Only a correct code reaches it,
+            // so it tells nobody anything about an account.
+            if (e.error.code != SESSION_REVOCATION_FAILED) {
+                val failure = failureOf(e.error, forVerify = true)
+                if (failure.problem == ResetProblem.CODE_REJECTED && ++wrongTries >= MAX_TRIES) {
+                    // Five wrong tries kill the code on the server; offer a new one at once.
+                    _state.value = current.copy(resendAtMs = now(), dead = true)
+                }
+                return failure
             }
-            return failure
         } catch (e: IOException) {
             return ResetFailure(ResetProblem.NETWORK)
         } catch (e: Exception) {
@@ -190,6 +197,10 @@ class PasswordResetFlow(
 
     companion object {
         const val MIN_PASSWORD = 10
+
+        /** The server's limit (128); a longer one would only get the vague "not accepted". */
+        const val MAX_PASSWORD = 128
+        const val SESSION_REVOCATION_FAILED = "SESSION_REVOCATION_FAILED"
         const val CODE_LENGTH = 6
         const val MAX_TRIES = 5
 
