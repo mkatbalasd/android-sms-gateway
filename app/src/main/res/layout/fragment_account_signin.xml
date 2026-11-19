@@ -70,6 +70,13 @@
             android:text="@string/account_btn_signin_submit" />
 
         <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonForgotPassword"
+            style="?attr/borderlessButtonStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/account_btn_forgot" />
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonSignInBack"
             style="?attr/borderlessButtonStyle"
             android:layout_width="match_parent"

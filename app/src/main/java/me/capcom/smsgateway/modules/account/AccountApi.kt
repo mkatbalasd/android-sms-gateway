@@ -69,6 +69,18 @@ interface AppBackend {
 }
 
 /**
+ * The forgotten-password calls (V2-L33). They are the web reset of the platform on the app
+ * host (`/api/auth/reset/*`), public: no token, no cookie. Same error contract as the rest.
+ */
+interface PasswordResetBackend {
+    /** 202 for every number; throws [AccountException] for 429 (RESET_RATE_LIMIT) and 503. */
+    suspend fun resetStart(request: ResetStartRequest)
+
+    /** 200 {success:true}; 400 OTP_INVALID for every wrong, missing, used or expired code. */
+    suspend fun resetVerify(request: ResetVerifyRequest)
+}
+
+/**
  * Ktor client for https://api.mnaseb.com/v1. JSON in and out, 15 s timeouts.
  * `Authorization: Bearer` is sent on the app routes only (enrolment); sign-up,
  * login and refresh carry none. Bodies are serialised here with Gson so the
@@ -77,7 +89,8 @@ interface AppBackend {
 class AccountApi(
     private val baseUrl: String = DEFAULT_BASE_URL,
     engine: HttpClientEngine? = null,
-) : AccountBackend, AppBackend {
+    private val resetBaseUrl: String = DEFAULT_RESET_BASE_URL,
+) : AccountBackend, AppBackend, PasswordResetBackend {
 
     private val gson = Gson()
 
@@ -191,14 +204,29 @@ class AccountApi(
 
     //endregion
 
+    //region Forgotten password (V2-L33)
+
+    override suspend fun resetStart(request: ResetStartRequest) {
+        // Any 2xx is the neutral "accepted"; the body is not read, so no field can say more.
+        send("/auth/reset/start", request, null, base = resetBaseUrl)
+    }
+
+    override suspend fun resetVerify(request: ResetVerifyRequest) {
+        val done = parse<ResetVerifyResponse>(send("/auth/reset/verify", request, null, base = resetBaseUrl))
+        if (done.success != true) throw AccountException(AccountError("BAD_RESPONSE", 200))
+    }
+
+    //endregion
+
     private suspend fun send(
         path: String,
         body: Any?,
         bearer: String?,
         method: HttpMethod = HttpMethod.Post,
         extraHeaders: Map<String, String> = emptyMap(),
+        base: String = baseUrl,
     ): String {
-        val response: HttpResponse = client.request(baseUrl + path) {
+        val response: HttpResponse = client.request(base + path) {
             this.method = method
             header(HttpHeaders.Accept, "application/json")
             if (bearer != null) {
@@ -260,6 +288,9 @@ class AccountApi(
 
     companion object {
         const val DEFAULT_BASE_URL = "https://api.mnaseb.com/v1"
+
+        /** The reset routes live on the app host under /api/auth; the API host proxies /v1 only. */
+        const val DEFAULT_RESET_BASE_URL = "https://app.mnaseb.com/api"
         private const val TIMEOUT_MS = 15_000L
         const val IDEMPOTENCY_HEADER = "X-Idempotency-Key"
         private val ID_PATTERN = Regex("^[0-9A-Za-z-]{1,64}$")

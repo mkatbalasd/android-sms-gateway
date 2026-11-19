@@ -62,6 +62,7 @@ class AccountActivity : AppCompatActivity() {
             AccountScreen.SIGN_IN -> SignInFragment()
             AccountScreen.CODE -> CodeFragment()
             AccountScreen.LINKING -> LinkingFragment()
+            AccountScreen.RESET -> ResetPasswordFragment()
         }
         supportFragmentManager.beginTransaction()
             .replace(R.id.accountContainer, fragment, tag)
