@@ -15,8 +15,7 @@ awk -F'|' '
       printf "quarantine.txt line %d needs: test | root cause | ROADMAP row\n", NR > "/dev/stderr"
       bad = 1; next
     }
-    if (row !~ /^V2-L[0-9]+$/) printf "::warning::quarantine.txt line %d: ROADMAP row \"%s\" is not V2-L<digits>
-", NR, row > "/dev/stderr"
+    if (row !~ /^V2-L[0-9]+$/) printf "::warning::quarantine.txt line %d: ROADMAP row \"%s\" is not V2-L<digits>\n", NR, row > "/dev/stderr"
     printf "%s%s", (n++ ? "," : ""), t
   }
   END { printf "\n"; exit bad }
