@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="24dp">
+
+        <TextView
+            android:id="@+id/textResetTitle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="@string/account_reset_title"
+            android:textAppearance="@style/TextAppearance.AppCompat.Headline" />
+
+        <!-- Step 1: the number. Never prefilled; only the country is preselected. -->
+        <LinearLayout
+            android:id="@+id/layoutResetPhone"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/account_reset_phone_intro" />
+
+            <me.capcom.smsgateway.ui.account.IntlPhoneView
+                android:id="@+id/phoneReset"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonResetSend"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/account_reset_btn_send" />
+        </LinearLayout>
+
+        <!-- Step 2: the code and the new password (never saved in the instance state). -->
+        <LinearLayout
+            android:id="@+id/layoutResetCode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/account_reset_code_neutral" />
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layoutResetCodeField"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:hint="@string/account_reset_hint_code"
+                app:errorEnabled="true">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editResetCode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:gravity="start"
+                    android:importantForAutofill="no"
+                    android:inputType="number"
+                    android:maxLength="12"
+                    android:saveEnabled="false"
+                    android:textDirection="ltr" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layoutResetNewPassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/account_reset_hint_new_password"
+                app:endIconMode="password_toggle"
+                app:errorEnabled="true">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editResetNewPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:autofillHints="newPassword"
+                    android:gravity="start"
+                    android:inputType="textPassword"
+                    android:maxLength="128"
+                    android:saveEnabled="false"
+                    android:textDirection="ltr" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.textfield.TextInputLayout
+                android:id="@+id/layoutResetConfirmPassword"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="@string/account_reset_hint_confirm_password"
+                app:endIconMode="password_toggle"
+                app:errorEnabled="true">
+
+                <com.google.android.material.textfield.TextInputEditText
+                    android:id="@+id/editResetConfirmPassword"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:autofillHints="newPassword"
+                    android:gravity="start"
+                    android:inputType="textPassword"
+                    android:maxLength="128"
+                    android:saveEnabled="false"
+                    android:textDirection="ltr" />
+            </com.google.android.material.textfield.TextInputLayout>
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonResetConfirm"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp"
+                android:text="@string/account_reset_btn_confirm" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonResetResend"
+                style="?attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/account_reset_resend" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/buttonResetChangeNumber"
+                style="?attr/borderlessButtonStyle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="@string/account_reset_change_number" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/textResetError"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:textColor="?attr/colorError"
+            android:visibility="gone" />
+
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonResetBack"
+            style="?attr/borderlessButtonStyle"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="@string/cancel" />
+    </LinearLayout>
+</ScrollView>

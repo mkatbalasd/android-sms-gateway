@@ -71,6 +71,22 @@ data class LoginVerifyRequest(
     override fun toString() = "LoginVerifyRequest(redacted)"
 }
 
+/** POST /api/auth/reset/start (V2-L33): the number only; the answer is the same for every number. */
+data class ResetStartRequest(val contact: String, val locale: String?) {
+    override fun toString() = "ResetStartRequest(redacted)"
+}
+
+/** POST /api/auth/reset/verify: the number, the 6-digit code and the new password. */
+data class ResetVerifyRequest(
+    val contact: String,
+    val code: String,
+    @SerializedName("new_password") val newPassword: String,
+) {
+    override fun toString() = "ResetVerifyRequest(redacted)"
+}
+
+data class ResetVerifyResponse(val success: Boolean?)
+
 data class LoginResendRequest(@SerializedName("login_id") val loginId: String)
 
 data class RefreshRequest(

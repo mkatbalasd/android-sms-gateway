@@ -112,6 +112,16 @@ class AccountRepository(
         return VerifyOutcome(signedIn = true, enrolment = answer.enrolment, next = answer.next)
     }
 
+    /**
+     * After a successful password reset every server session of the account is already
+     * revoked: forget the tokens and any waiting code here. The link of the phone (linked flag,
+     * tenant, install id) is kept, so signing in again re-attaches the phone (V2-L14).
+     */
+    fun clearLocalSession() {
+        settings.clearSession()
+        settings.pending = null
+    }
+
     fun pending(): PendingVerification? = settings.pending
 
     fun discardPending() {

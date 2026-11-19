@@ -23,7 +23,7 @@ import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 import java.io.IOException
 
-enum class AccountScreen { WELCOME, PERMISSIONS, CREATE, SIGN_IN, CODE, LINKING }
+enum class AccountScreen { WELCOME, PERMISSIONS, CREATE, SIGN_IN, CODE, LINKING, RESET }
 
 /** What the first-run screens do; pure, so the linked-phone rules are unit-tested. */
 object AccountRouting {
@@ -126,11 +126,30 @@ class AccountViewModel(application: Application) : AndroidViewModel(application)
         screen.value = afterPermissions
     }
 
+    /** «نسيت كلمة المرور» on the sign-in screen (V2-L33). */
+    fun openReset() {
+        screen.value = AccountScreen.RESET
+    }
+
+    /**
+     * The password is changed and the local tokens are gone (the server ended every session):
+     * back to sign-in with the new password. The phone stays linked; a linked phone re-attaches.
+     */
+    fun resetDone() {
+        info.value = R.string.account_reset_done
+        screen.value = AccountScreen.SIGN_IN
+    }
+
     /** The system Back key. Returns false when the activity should close. */
     fun back(): Boolean = when (screen.value) {
         // Signing in again on a linked phone has no welcome screen to go back to.
         AccountScreen.SIGN_IN -> if (isResignIn()) false else {
             screen.value = AccountScreen.WELCOME
+            true
+        }
+
+        AccountScreen.RESET -> {
+            screen.value = AccountScreen.SIGN_IN
             true
         }
 

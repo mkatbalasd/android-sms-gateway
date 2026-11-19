@@ -284,6 +284,11 @@ class SignInFragment : Fragment() {
         val ctx = requireContext()
 
         binding.buttonSignInSubmit.setOnClickListener { submit(viewModel) }
+        binding.buttonForgotPassword.setOnClickListener {
+            // Every entry starts the reset from its first step with nothing remembered.
+            ViewModelProvider(requireActivity())[PasswordResetViewModel::class.java].begin()
+            viewModel.openReset()
+        }
         binding.buttonSignInBack.setOnClickListener {
             // A linked phone signing in again has no welcome screen: back closes the screen.
             if (!viewModel.back()) requireActivity().finish()

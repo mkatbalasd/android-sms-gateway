@@ -18,6 +18,8 @@ val accountModule = module {
     single { AccountApi() }
     single<AccountBackend> { get<AccountApi>() }
     single<AppBackend> { get<AccountApi>() }
+    single<PasswordResetBackend> { get<AccountApi>() }
+    factory { PasswordResetFlow(get<PasswordResetBackend>(), get<AccountRepository>()::clearLocalSession) }
     single {
         AccountRepository(
             get<AccountBackend>(),
