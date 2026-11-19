@@ -350,13 +350,14 @@ class GatewayService(
 
     internal suspend fun sendState(
         request: GatewayApi.MessagePatchRequest
-    ) {
-        val settings = settings.registrationInfo ?: return
+    ): Boolean {
+        val settings = settings.registrationInfo ?: return false
 
         api.patchMessages(
             settings.token,
             listOf(request)
         )
+        return true
     }
     //endregion
 
