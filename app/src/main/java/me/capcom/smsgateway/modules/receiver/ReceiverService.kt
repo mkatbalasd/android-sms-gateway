@@ -15,7 +15,6 @@ import me.capcom.smsgateway.modules.incoming.db.IncomingMessageType
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.receiver.data.InboxMessage
-import me.capcom.smsgateway.modules.retention.IncomingSlotFilter
 import me.capcom.smsgateway.modules.webhooks.WebHooksService
 import me.capcom.smsgateway.modules.webhooks.domain.WebHookEvent
 import me.capcom.smsgateway.modules.webhooks.payload.MmsBatchDownloadedPayload
@@ -225,7 +224,8 @@ class ReceiverService : KoinComponent {
         // CARD-24: only an SMS that arrives on a slot holding an ACTIVE line of the account is
         // kept and forwarded. Any other (the owner's personal SIM, an unknown slot) is dropped
         // here: not stored, not forwarded, and never logged with a body or a sender.
-        if (!IncomingSlotFilter.accept(simNumber, activeLines.slots())) {
+        // A customer phone with no list yet drops everything outside a number-proof window.
+        if (!activeLines.accepts(simNumber)) {
             logsService.insert(
                 LogEntry.Priority.DEBUG,
                 MODULE_NAME,

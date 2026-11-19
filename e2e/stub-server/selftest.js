@@ -62,6 +62,17 @@ server.listen(0, '127.0.0.1', async () => {
     await post(base, '/__control/inject/inbound-sms', { from: '5551234', text: 'e2e hello' });
     assert.strictEqual(await (await fetch(base + '/__control/sms-requests.txt')).text(), '5551234\te2e hello\n');
     assert.strictEqual(await (await fetch(base + '/__control/sms-requests.txt')).text(), '');
+    // CARD-24 follow-up: the line list can be made unavailable, then served again
+    await post(base, '/__control/lines', { slot: 1 });
+    r = await fetch(v1 + '/app/lines', { headers: { Authorization: 'Bearer a' } });
+    assert.strictEqual(r.status, 200);
+    assert.strictEqual((await r.json()).items.length, 1);
+    await post(base, '/__control/lines/unavailable', { on: true });
+    r = await fetch(v1 + '/app/lines', { headers: { Authorization: 'Bearer a' } });
+    assert.strictEqual(r.status, 503);
+    await post(base, '/__control/lines/unavailable', { on: false });
+    r = await fetch(v1 + '/app/lines', { headers: { Authorization: 'Bearer a' } });
+    assert.strictEqual(r.status, 200);
     console.log('stub selftest OK');
     server.close(); process.exit(0);
   } catch (e) {

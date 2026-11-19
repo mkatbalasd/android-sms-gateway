@@ -44,6 +44,16 @@ class E2eGatewayTest {
         E2e.ensureLinkedAndHome()
         // the E2E passphrase comes from GET /settings; without it the app cannot encrypt the upload
         E2e.waitFor("the app to read /settings") { E2e.stub().getInt("settingsServed") >= 1 }
+        // CARD-24 (fail closed): a customer phone keeps an SMS only on a slot of a received line
+        // list, so the platform reports an active line on slot 1 (the emulator's only SIM) first
+        StubControl.setLinesUnavailable(false)
+        StubControl.seedLine(1)
+        val koin = org.koin.core.context.GlobalContext.get()
+        val lines = koin.get<me.capcom.smsgateway.modules.retention.ActiveLineStore>()
+        kotlinx.coroutines.runBlocking {
+            koin.get<me.capcom.smsgateway.modules.retention.RetentionService>().refreshActiveLines()
+        }
+        E2e.waitFor("the active line slots to be known") { lines.slots()?.contains(1) == true }
         val before = E2e.stub().getJSONArray("inbox").length()
         val text = "e2e in ${SystemClock.elapsedRealtime()}"
 

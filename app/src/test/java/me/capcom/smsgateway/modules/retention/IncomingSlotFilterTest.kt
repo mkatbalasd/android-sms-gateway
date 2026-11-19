@@ -9,8 +9,8 @@ import org.junit.Test
 
 /**
  * CARD-24: with a fetched list only SMS on a slot holding a non-retired line of this phone are
- * kept; with no list (never fetched, no app session, gateway-only link, after an unlink) the
- * filter fails open.
+ * kept (ACTIVE and PENDING); with no list a customer phone fails closed and only the explicit
+ * platform-phone role or an open number-proof window lets an SMS through.
  */
 class IncomingSlotFilterTest {
     private fun line(slot: Int?, status: String? = "ACTIVE", verifiedAt: String? = "2026-11-10T10:00:00Z") =
@@ -38,11 +38,40 @@ class IncomingSlotFilterTest {
         assertFalse(IncomingSlotFilter.accept(1, emptySet()))
     }
 
+    // Owner decision 2026-11-19: a customer phone FAILS CLOSED. This replaces the fail-open test
+    // of rev-34-2 (withNoListEverFetchedEverythingIsAcceptedAsBefore).
     @Test
-    fun withNoListEverFetchedEverythingIsAcceptedAsBefore() {
-        assertTrue(IncomingSlotFilter.accept(1, null))
-        assertTrue(IncomingSlotFilter.accept(2, null))
-        assertTrue(IncomingSlotFilter.accept(null, null))
+    fun aCustomerPhoneThatNeverGotAListKeepsNothing() {
+        assertFalse(IncomingSlotFilter.accept(1, null))
+        assertFalse(IncomingSlotFilter.accept(2, null))
+        assertFalse(IncomingSlotFilter.accept(null, null))
+        assertFalse(IncomingSlotFilter.accept(1, null, platformPhone = false, proofSlots = emptySet()))
+    }
+
+    @Test
+    fun theExplicitPlatformPhoneStaysOpenWhileItHasNoList() {
+        assertTrue(IncomingSlotFilter.accept(1, null, platformPhone = true))
+        assertTrue(IncomingSlotFilter.accept(2, null, platformPhone = true))
+        assertTrue(IncomingSlotFilter.accept(null, null, platformPhone = true))
+    }
+
+    @Test
+    fun theRoleNeverOpensTheFilterOnceAListExists() {
+        assertFalse(IncomingSlotFilter.accept(2, setOf(1), platformPhone = true))
+        assertTrue(IncomingSlotFilter.accept(1, setOf(1), platformPhone = true))
+    }
+
+    @Test
+    fun anOpenProofWindowAcceptsItsSlotEvenWithNoList() {
+        assertTrue(IncomingSlotFilter.accept(2, null, proofSlots = setOf(2)))
+        assertFalse(IncomingSlotFilter.accept(1, null, proofSlots = setOf(2)))
+        assertFalse(IncomingSlotFilter.accept(null, null, proofSlots = setOf(2)))
+    }
+
+    @Test
+    fun aProofWindowAlsoPassesNextToAList() {
+        assertTrue(IncomingSlotFilter.accept(2, setOf(1), proofSlots = setOf(2)))
+        assertFalse(IncomingSlotFilter.accept(3, setOf(1), proofSlots = setOf(2)))
     }
 
     @Test
@@ -70,6 +99,7 @@ class IncomingSlotFilterTest {
         assertEquals(setOf(1, 2), ActiveLineStore.withSlot(setOf(1), 2))
     }
 
+    // The list itself stays "never received" (the proof window, not a list, opens the slot).
     @Test
     fun startingAProofDoesNotTurnAnUnknownListIntoARestrictiveOne() {
         assertNull(ActiveLineStore.withSlot(null, 2))

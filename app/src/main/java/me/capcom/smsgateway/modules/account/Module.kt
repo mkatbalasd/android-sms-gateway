@@ -42,8 +42,11 @@ val accountModule = module {
                     me.capcom.smsgateway.modules.retention.IncomingSlotFilter.activeSlots(lines)
                 )
             },
-            onClaim = { slot ->
-                get<me.capcom.smsgateway.modules.retention.ActiveLineStore>().addSlot(slot)
+            onClaim = { slot, expiresInSeconds ->
+                get<me.capcom.smsgateway.modules.retention.ActiveLineStore>().addSlot(
+                    slot,
+                    me.capcom.smsgateway.modules.retention.ActiveLineStore.proofWindowMs(expiresInSeconds),
+                )
             },
         )
     }
