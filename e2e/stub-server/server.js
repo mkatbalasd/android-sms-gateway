@@ -256,7 +256,7 @@ async function control(req, res, path, method, url) {
   const body = method === 'POST' ? await readBody(req) : null;
   switch (`${method} ${path.slice('/__control'.length)}`) {
     case 'GET /health': return send(res, 200, 'ok');
-    case 'GET /state': return send(res, 200, { ...S, queue: S.queue.map((m) => ({ id: m.id, handedOut: !!m.handedOut })), requests: undefined, requestCount: S.requests.length, sseOpen: S.sse.open });
+    case 'GET /state': return send(res, 200, { ...S, queue: S.queue.map((m) => ({ id: m.id, handedOut: !!m.handedOut })), requests: undefined, requestsTail: S.requests.slice(-80), requestCount: S.requests.length, sseOpen: S.sse.open });
     case 'GET /requests': return send(res, 200, S.requests);
     case 'GET /inbox': return send(res, 200, S.inbox);
     case 'GET /reports': return send(res, 200, S.messageReports);

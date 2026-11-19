@@ -41,8 +41,13 @@ class E2eGatewayTest {
 
         StubControl.requestInboundSms("5551234", text)
 
-        E2e.waitFor("the inbound SMS to be reported on /inbox") {
-            E2e.stub().getJSONArray("inbox").length() > before
+        try {
+            E2e.waitFor("the inbound SMS to be reported on /inbox") {
+                E2e.stub().getJSONArray("inbox").length() > before
+            }
+        } catch (e: AssertionError) {
+            E2e.dumpEvidence()
+            throw e
         }
         val inbox = E2e.stub().getJSONArray("inbox")
         assertEquals("exactly one report for one SMS", before + 1, inbox.length())

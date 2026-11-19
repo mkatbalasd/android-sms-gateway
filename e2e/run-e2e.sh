@@ -12,7 +12,7 @@ MODE=${1:?smoke|full}
 OUT=${E2E_OUT:-e2e-out}
 APK=${E2E_APK:-app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk}
 TEST_APK=${E2E_TEST_APK:-app/build/outputs/apk/androidTest/emulatorE2e/app-emulatorE2e-androidTest.apk}
-RUNNER=com.mnaseb.sim.test/androidx.test.runner.AndroidJUnitRunner
+RUNNER=com.mnaseb.sim.e2e.test/androidx.test.runner.AndroidJUnitRunner
 mkdir -p "$OUT"
 
 case "$MODE" in
@@ -48,18 +48,35 @@ fi
 adb install -r "$APK" || exit 1
 adb install -r "$TEST_APK" || exit 1
 
-NOT_CLASS=$(bash e2e/quarantine.sh)
+NOT_CLASS=$(bash e2e/quarantine.sh) || { echo "quarantine.txt is malformed"; exit 1; }
 echo "quarantined: ${NOT_CLASS:-none}"
-ARGS=(-w -e annotation "$ANNOTATION" -e package me.capcom.smsgateway.e2e)
-[ -n "$NOT_CLASS" ] && ARGS+=(-e notClass "$NOT_CLASS")
 
-adb shell am instrument "${ARGS[@]}" "$RUNNER" | tee "$OUT/instrumented-output.txt"
+P=me.capcom.smsgateway.e2e
+# Classes run one `am instrument` each, in this order: the fresh-install checks (smoke, sign-up)
+# must see an app that is not linked yet; the later classes link it themselves if needed and
+# then share the linked state. (A single run orders classes arbitrarily.)
+if [ "$MODE" = smoke ]; then CLASSES="$P.E2eSmokeTest"
+else CLASSES="$P.E2eSmokeTest $P.E2eSignUpTest $P.E2eLineVerifyTest $P.E2eGatewayTest"; fi
+
+RAN=0
+: > "$OUT/instrumented-output.txt"
+FAILED=0
+for c in $CLASSES; do
+  case ",$NOT_CLASS," in *",$c,"*) echo "skipping quarantined $c" | tee -a "$OUT/instrumented-output.txt"; continue ;; esac
+  echo "=== $c" | tee -a "$OUT/instrumented-output.txt"
+  adb shell am instrument -w -e class "$c" "$RUNNER" | tee "$OUT/one.txt" >> "$OUT/instrumented-output.txt"
+  cat "$OUT/one.txt"
+  if grep -qE "OK \([1-9][0-9]* tests?\)" "$OUT/one.txt" && ! grep -qE "FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=" "$OUT/one.txt"; then
+    RAN=$((RAN + 1))
+  else
+    FAILED=1
+  fi
+done
 curl -fsS http://127.0.0.1:8787/__control/state > "$OUT/stub-state.json" 2>/dev/null || true
 
-# Real pass condition only: an OK line with at least one test, and no failure marker.
-if ! grep -qE "OK \([1-9][0-9]* tests?\)" "$OUT/instrumented-output.txt" \
-   || grep -qE "FAILURES!!!|INSTRUMENTATION_FAILED|shortMsg=" "$OUT/instrumented-output.txt"; then
-  echo "e2e $MODE FAILED"
+# Real pass condition only: every non-quarantined class ended with an OK line (at least one test).
+if [ "$FAILED" -ne 0 ] || [ "$RAN" -eq 0 ]; then
+  echo "e2e $MODE FAILED (classes OK: $RAN)"
   exit 1
 fi
-echo "e2e $MODE OK"
+echo "e2e $MODE OK ($RAN classes)"

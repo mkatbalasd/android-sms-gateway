@@ -55,6 +55,8 @@ android {
         emulatorE2e {
             initWith debug
             debuggable true
+            // distinct package: never replaces or collides with an installed Mnaseb SIM
+            applicationIdSuffix ".e2e"
             signingConfig signingConfigs.debug
             manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config_insecure"]
         }

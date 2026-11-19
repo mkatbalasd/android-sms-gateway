@@ -9,7 +9,7 @@ set -uo pipefail
 
 OUT=${E2E_OUT:-e2e-out}
 APK=${E2E_APK:-app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk}
-PKG=com.mnaseb.sim
+PKG=com.mnaseb.sim.e2e
 REPORT="$OUT/play-protect-report.md"
 mkdir -p "$OUT"
 : > "$REPORT"

@@ -45,6 +45,8 @@ The e2e tests (`app/src/androidTestE2e`) are only added to the androidTest sourc
 `-Pe2eBuildType=emulatorE2e`, so the existing `Instrumented Tests` job (API 25/30/35, debug
 build) is untouched.
 
+The e2e APK installs as `com.mnaseb.sim.e2e` (`applicationIdSuffix`), so it never replaces an installed Mnaseb SIM. The placeholder `google-services.json` lists both package names.
+
 ## What each test proves (in simulation)
 
 | Test | Proves |

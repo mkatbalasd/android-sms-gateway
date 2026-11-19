@@ -9,7 +9,11 @@ import androidx.test.uiautomator.UiDevice
 import androidx.test.uiautomator.UiObject2
 import androidx.test.uiautomator.Until
 import me.capcom.smsgateway.ui.account.AccountActivity
+import android.util.Log
+import kotlinx.coroutines.runBlocking
+import me.capcom.smsgateway.modules.logs.LogsService
 import org.json.JSONObject
+import org.koin.core.context.GlobalContext
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.fail
 import java.util.regex.Pattern
@@ -21,7 +25,7 @@ import java.util.regex.Pattern
  * state); there is no sleep that stands in for an assertion.
  */
 object E2e {
-    const val PKG = "com.mnaseb.sim"
+    const val PKG = "com.mnaseb.sim.e2e"
     const val TEST_PASSWORD = "E2e-Test-Pass-1"
     const val TEST_OTP = "123456"
     const val SHORT = 10_000L
@@ -145,5 +149,28 @@ object E2e {
         if (!isLinkedOnStub()) signUpAndLink()
         startLauncher()
         need("buttonHomePause", LONG)
+    }
+
+    /**
+     * Failure evidence for a CI run: the app's own WARN/ERROR log rows (module and message, digit
+     * runs masked) and the tail of the stub's request log, written to logcat under E2E-APPLOG and
+     * E2E-STUB. Never prints a message body, a number, a code or a token.
+     */
+    fun dumpEvidence() {
+        val digits = Regex("[0-9\u0660-\u0669]+")
+        try {
+            val logs = GlobalContext.get().get<LogsService>()
+            runBlocking { logs.select() }
+                .filter { it.priority.ordinal >= me.capcom.smsgateway.modules.logs.db.LogEntry.Priority.WARN.ordinal }
+                .takeLast(25)
+                .forEach { Log.e("E2E-APPLOG", digits.replace("${it.priority} ${it.module} ${it.message}", "#")) }
+        } catch (e: Throwable) {
+            Log.e("E2E-APPLOG", "could not read app logs: ${e.javaClass.simpleName}")
+        }
+        try {
+            Log.e("E2E-STUB", digits.replace(stub().getJSONArray("requestsTail").toString(), "#"))
+        } catch (e: Throwable) {
+            Log.e("E2E-STUB", "could not read stub state: ${e.javaClass.simpleName}")
+        }
     }
 }

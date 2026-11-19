@@ -57,13 +57,16 @@ jobs:
           echo "APK=$APK" >> "$GITHUB_ENV"
           (cd dl && sha256sum -c "$(basename "$APK").sha256")
 
-      - name: Verify the signature is the release certificate, not the debug key
+      # Same pinned-certificate gate as the release workflow (a public value, not a secret).
+      - name: Verify the signature equals the pinned Mnaseb certificate
+        env:
+          PINNED_CERT_SHA256: "05f3a9e7b96c8306ce46c3312379d0713f5f92aca9b1a9f62492fab3a286f3e2"
         run: |
           set -euo pipefail
-          BT="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
-          "$BT/apksigner" verify --verbose --print-certs "$APK" | tee cert.txt
-          grep -q "Verifies" cert.txt
-          if grep -qi "CN=Android Debug" cert.txt; then echo "::error::release APK is debug-signed"; exit 1; fi
+          BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
+          export BUILD_TOOLS
+          "$BUILD_TOOLS/apksigner" verify --verbose "$APK" | grep -q "Verifies"
+          bash .github/scripts/check-pinned-cert.sh "$APK"
 
       - name: Grant KVM
         run: |
@@ -73,7 +76,7 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Install and open on the emulator
-        uses: reactivecircus/android-emulator-runner@v2
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
         with:
           api-level: 34
           target: google_apis

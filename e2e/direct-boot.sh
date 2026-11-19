@@ -11,8 +11,8 @@ set -uo pipefail
 OUT=${E2E_OUT:-e2e-out}
 APK=${E2E_APK:-app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk}
 TEST_APK=${E2E_TEST_APK:-app/build/outputs/apk/androidTest/emulatorE2e/app-emulatorE2e-androidTest.apk}
-RUNNER=com.mnaseb.sim.test/androidx.test.runner.AndroidJUnitRunner
-PKG=com.mnaseb.sim
+RUNNER=com.mnaseb.sim.e2e.test/androidx.test.runner.AndroidJUnitRunner
+PKG=com.mnaseb.sim.e2e
 PIN=1234 # a throwaway emulator PIN, never a real one
 STUB=http://127.0.0.1:8787/__control
 REPORT="$OUT/direct-boot-report.md"
