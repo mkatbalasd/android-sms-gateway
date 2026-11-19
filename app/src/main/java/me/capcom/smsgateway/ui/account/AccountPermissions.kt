@@ -62,8 +62,8 @@ object AccountPermissions {
      */
     fun state(
         sdkInt: Int = Build.VERSION.SDK_INT,
-        isGranted: (String) -> Boolean,
         sendOnly: Boolean = BuildConfig.SEND_ONLY,
+        isGranted: (String) -> Boolean,
     ): PermissionState {
         val missing = required(sdkInt, sendOnly).filterNot(isGranted)
         val smsList = smsPermissions(sendOnly)
@@ -72,6 +72,10 @@ object AccountPermissions {
 
     /** Evaluates the real grant state now; call again on resume, it is never cached. */
     fun state(context: Context): PermissionState = state { granted(context, it) }
+
+    /** Positional form (sdkInt, isGranted) kept for existing callers and tests. */
+    fun state(sdkInt: Int, isGranted: (String) -> Boolean): PermissionState =
+        state(sdkInt, BuildConfig.SEND_ONLY, isGranted)
 
     fun missing(context: Context): List<String> = state(context).missing
 
