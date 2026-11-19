@@ -36,6 +36,8 @@ class E2eGatewayTest {
     @Test
     fun t01_anInboundSmsFromTheEmulatorConsoleIsReportedToTheStubInbox() {
         E2e.ensureLinkedAndHome()
+        // the E2E passphrase comes from GET /settings; without it the app cannot encrypt the upload
+        E2e.waitFor("the app to read /settings") { E2e.stub().getInt("settingsServed") >= 1 }
         val before = E2e.stub().getJSONArray("inbox").length()
         val text = "e2e in ${SystemClock.elapsedRealtime()}"
 
@@ -55,6 +57,7 @@ class E2eGatewayTest {
         assertEquals("SMS", item.getString("type"))
         // With E2E encryption on, the content is ciphertext; in the clear it must be the text.
         if (!item.optBoolean("isEncrypted", true)) assertEquals(text, item.getString("content"))
+        else assertTrue("content is passphrase-encrypted", item.getString("content").startsWith("\$aes-256-cbc/pbkdf2-sha1/v2\$"))
     }
 
     @Test

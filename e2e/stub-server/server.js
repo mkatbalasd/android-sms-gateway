@@ -33,6 +33,7 @@ function fresh() {
     inbox: [],            // POST /inbox items, in order
     heartbeats: [],       // ISO time of every authenticated GET /message
     sse: { connections: 0, open: 0, lastConnectAt: null },
+    settingsServed: 0,    // GET /settings answers (the app imports the E2E passphrase from them)
     smsRequests: [],      // for the host watcher: inbound SMS to fire at the emulator
     requests: [],         // "METHOD path" log, no bodies
   };
@@ -235,7 +236,9 @@ function gateway(req, res, method, p, body) {
       for (const m of Array.isArray(body) ? body : []) S.inbox.push({ ...m, receivedAt: now() });
       return send(res, 201);
     case 'GET /events': return sse(req, res);
-    case 'GET /settings': return send(res, 200, {});
+    // The real server hands the phone its E2E passphrase here; without it the app cannot encrypt an
+    // inbox upload ("Passphrase is not set") and never posts an inbound SMS.
+    case 'GET /settings': S.settingsServed++; return send(res, 200, { encryption: { passphrase: 'e2e-test-passphrase-0001' } });
     case 'GET /webhooks': return send(res, 200, []);
     case 'GET /user/code': return send(res, 200, { code: '123456', validUntil: new Date(Date.now() + 300000).toISOString() });
     case 'PATCH /user/password': return send(res, 204);
@@ -248,6 +251,11 @@ function sse(req, res) {
   res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
   res.write(': connected\n\n');
   sseClients.add(res);
+  // Tell the phone to re-read /settings (as the server does when settings change).
+  res.write('event: SettingsUpdated
+data: {}
+
+');
   const ping = setInterval(() => res.write(': ping\n\n'), 15000);
   req.on('close', () => { clearInterval(ping); sseClients.delete(res); S.sse.open--; });
 }

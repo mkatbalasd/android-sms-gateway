@@ -24,6 +24,9 @@ class E2eDirectBootTest {
         E2e.waitFor("the phone to hold a live stream before the reboot") {
             E2e.stub().getInt("sseOpen") >= 1
         }
+        // the E2E passphrase (from GET /settings) must be stored before the reboot: it is what
+        // lets a text received after unlock be encrypted and uploaded
+        E2e.waitFor("the app to read /settings") { E2e.stub().getInt("settingsServed") >= 1 }
     }
 
     @Test
