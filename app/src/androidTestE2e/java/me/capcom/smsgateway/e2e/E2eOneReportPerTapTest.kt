@@ -10,11 +10,14 @@ import org.junit.runner.RunWith
 
 /**
  * Strict form of the property: one tap sends ONE state report `Sent` for the message, not two.
- * CI evidence (run 44431177515): the phone sends one SMS (one message id, one send time) but posts
- * the identical final state twice, ~10 ms apart (`PATCH /message` twice). That is an app defect in
- * the state-report path, not a double send, and is tracked in e2e/quarantine.txt (V2-L47). The
- * assertion is kept unchanged here; only this class is quarantined, E2eGatewayTest still proves
- * one message id and one send.
+ * CI evidence (run 44431177515): one message id, but the identical final state is posted twice,
+ * about 10 ms apart (`PATCH /message` twice); the log shows each MessageStateChangedEvent twice and
+ * two SendStateWorker runs. That is a duplicate state report in the app (cause not yet traced),
+ * tracked in e2e/quarantine.txt (V2-L47). The assertion is kept unchanged; only this class is
+ * quarantined. Whether the phone also SENT twice is a separate question: E2eGatewayTest checks it
+ * through the emulator's telephony log (one submission per destination), which is not a radio
+ * capture; a double SMS for one id is not excluded by the emulator suite and stays a
+ * real-device item.
  */
 @E2eFull
 @RunWith(AndroidJUnit4::class)

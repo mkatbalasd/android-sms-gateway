@@ -88,6 +88,7 @@ class E2eGatewayTest {
     fun t03_oneTapOnSendTestMessageSendsExactlyOneSms() {
         E2e.ensureLinkedAndHome()
         val postsBefore = E2e.stub().getJSONArray("testMessagePosts").length()
+        val sinceTap = E2e.logcatNow()
 
         E2e.need("buttonHomeTest").click()
         // Dialog positive button ("Send"); one click only.
@@ -103,20 +104,15 @@ class E2eGatewayTest {
 
         E2e.waitFor("the phone to report the message as Sent") { reportsFor(id, "Sent") >= 1 }
         SystemClock.sleep(settleMs)
-        // Ground truth of the SMS itself: the app stamps `Sent` with the time of the send, so a
-        // second send would show as another distinct Sent time (or another message id). The strict
-        // "one Sent REPORT" form is E2eOneReportPerTapTest (the app posts the same final state twice).
-        val reports = E2e.stub().getJSONArray("messageReports")
-        val ids = HashSet<String>()
-        val sendTimes = HashSet<String>()
-        for (i in 0 until reports.length()) {
-            val r = reports.getJSONObject(i)
-            if (r.optString("id") != id) continue
-            ids.add(r.getString("id"))
-            r.optJSONObject("states")?.optString("Sent")?.takeIf { it.isNotEmpty() }?.let { sendTimes.add(it) }
-        }
-        assertEquals("one message id for one tap", 1, ids.size)
-        assertEquals("one send time (one SMS) for one tap", 1, sendTimes.size)
+        // Ground truth of the SMS itself, outside the app's state table (the app's per-state rows
+        // keep the FIRST Sent time on a repeat, so they cannot see a second send): the telephony
+        // stack logs one submission line per outgoing SMS. At least one proves the check can see
+        // the send; no destination may appear twice (a second send of the same message goes to the
+        // same recipient). Caveat: this is an emulator log line, not a radio capture, and the
+        // dialer's voicemail probe is another destination that must also appear once.
+        val submissions = E2e.radioSubmissionsSince(sinceTap)
+        assertTrue("no SMS submission seen in the telephony log since the tap", submissions.isNotEmpty())
+        submissions.forEach { (dest, n) -> assertEquals("destination $dest submitted $n times for one tap", 1, n) }
         assertEquals(
             "still one test-message POST after the settle window",
             postsBefore + 1, E2e.stub().getJSONArray("testMessagePosts").length()

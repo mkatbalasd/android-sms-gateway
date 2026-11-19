@@ -151,6 +151,29 @@ object E2e {
         need("buttonHomePause", LONG)
     }
 
+    /** Device-local logcat timestamp ("MM-dd HH:mm:ss.SSS"), the format `logcat` prints by default. */
+    fun logcatNow(): String =
+        java.text.SimpleDateFormat("MM-dd HH:mm:ss.SSS", java.util.Locale.US).format(java.util.Date())
+
+    /**
+     * Ground truth OUTSIDE the app's own state tables: how many SMS the telephony stack (the
+     * phone process, not this app) took for submission since [since] (a [logcatNow] value).
+     * The platform's SmsNumberUtils logs one `enter filterDestAddr` line per outgoing SMS with the
+     * destination as a hash; the result maps each destination hash to its submission count.
+     * Other senders on the emulator (the dialer's voicemail probe) show up as their own hash.
+     * Needs the shell user to read logcat, which UiDevice.executeShellCommand is.
+     */
+    fun radioSubmissionsSince(since: String): Map<String, Int> {
+        val out = device.executeShellCommand("logcat -b all -d -s SmsNumberUtils")
+        val counts = HashMap<String, Int>()
+        val dest = Regex("enter filterDestAddr\\. destAddr=\"\\[([^\\]]*)\\]\"")
+        for (line in out.lineSequence()) {
+            if (line.length < 18 || line.substring(0, 18) < since) continue
+            dest.find(line)?.let { counts.merge(it.groupValues[1], 1, Int::plus) }
+        }
+        return counts
+    }
+
     /**
      * Failure evidence for a CI run: the app's own WARN/ERROR log rows (module and message, digit
      * runs masked) and the tail of the stub's request log, written to logcat under E2E-APPLOG and
