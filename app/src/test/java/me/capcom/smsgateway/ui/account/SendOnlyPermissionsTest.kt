@@ -32,7 +32,7 @@ internal class SendOnlyPermissionsTest {
     @Test
     fun sendOnlyIsFullyGrantedWithSendSmsAndTheOthers() {
         val granted = AccountPermissions.required(sdk, sendOnly = true).toSet()
-        val state = AccountPermissions.state(sdk, sendOnly = true) { it in granted }
+        val state = AccountPermissions.state(sdk, { it in granted }, sendOnly = true)
         assertTrue(state.allGranted)
         assertTrue(state.smsGranted)
     }

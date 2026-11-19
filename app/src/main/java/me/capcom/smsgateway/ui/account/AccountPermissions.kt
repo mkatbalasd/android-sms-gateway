@@ -62,8 +62,8 @@ object AccountPermissions {
      */
     fun state(
         sdkInt: Int = Build.VERSION.SDK_INT,
-        sendOnly: Boolean = BuildConfig.SEND_ONLY,
         isGranted: (String) -> Boolean,
+        sendOnly: Boolean = BuildConfig.SEND_ONLY,
     ): PermissionState {
         val missing = required(sdkInt, sendOnly).filterNot(isGranted)
         val smsList = smsPermissions(sendOnly)
