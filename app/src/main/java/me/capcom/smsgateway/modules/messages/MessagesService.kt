@@ -640,6 +640,10 @@ class MessagesService(
                         sourcePhoneNumber, message.isEncrypted, request.params.skipPhoneValidation,
                     )
 
+                    // V2-L47 (unchanged behaviour, documented window): the radio hand-off and the
+                    // Processed write are not atomic. If the process dies between sendFn and the
+                    // write below, the recipient is still Pending on restart and may be sent again.
+                    // The state reports (SendStateWorker) are separate and cannot cause a resend.
                     sendFn(normalizedPhoneNumber, sentIntent, deliveredIntent)
 
                     machine.transitionRecipient(id, sourcePhoneNumber, ProcessingState.Processed)
