@@ -52,7 +52,7 @@ jobs:
           mkdir -p dl
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir dl --pattern 'mnaseb-sim-*.apk' --pattern 'mnaseb-sim-*.sha256'
           ls -l dl
-          APK=$(ls dl/mnaseb-sim-*.apk | grep -v unsigned | head -1)
+          APK=$(ls dl/mnaseb-sim-*.apk | grep -v unsigned | grep -v -- '-send-only\.apk$' | head -1)
           test -n "$APK" || { echo "::error::no signed APK on release $TAG (an unsigned build is not installable)"; exit 1; }
           echo "APK=$APK" >> "$GITHUB_ENV"
           (cd dl && sha256sum -c "$(basename "$APK").sha256")

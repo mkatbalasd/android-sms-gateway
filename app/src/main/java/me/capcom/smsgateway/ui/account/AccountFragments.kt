@@ -32,6 +32,7 @@ import me.capcom.smsgateway.modules.account.IsoTime
 import me.capcom.smsgateway.modules.account.IntlPhone
 import me.capcom.smsgateway.modules.account.MobileInput
 import me.capcom.smsgateway.modules.account.OtpDigits
+import me.capcom.smsgateway.BuildConfig
 import me.capcom.smsgateway.modules.account.OtpSmsReader
 import me.capcom.smsgateway.modules.account.PendingVerification
 import java.util.Locale
@@ -124,7 +125,8 @@ class PermissionsFragment : Fragment() {
         val b = _binding ?: return
         b.layoutDenied.isVisible = true
         b.textDenied.setText(
-            if (state.smsGranted) R.string.account_permissions_sms_granted_others_missing
+            if (state.smsGranted && BuildConfig.SEND_ONLY) R.string.account_permissions_sms_granted_others_missing_send_only
+            else if (state.smsGranted) R.string.account_permissions_sms_granted_others_missing
             else R.string.account_permissions_denied
         )
         b.textRestrictedNote.isVisible = !state.smsGranted
@@ -140,6 +142,9 @@ class PermissionsFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
         val viewModel = accountViewModel()
+
+        // CARD-25: the send-only build says plainly that it reads nothing and captures no STOP.
+        if (BuildConfig.SEND_ONLY) binding.textPermissionsBody.setText(R.string.account_permissions_body_send_only)
 
         binding.buttonAllow.setOnClickListener {
             val missing = AccountPermissions.missing(requireContext())

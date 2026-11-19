@@ -555,13 +555,14 @@ class HomeFragment : Fragment() {
     private var afterPermissions: (() -> Unit)? = null
 
     private fun requestPermissionsThen(then: () -> Unit) {
+        val sendOnly = me.capcom.smsgateway.BuildConfig.SEND_ONLY // CARD-25: no incoming-SMS permissions
         val permissionsRequired =
             listOf(
                 Manifest.permission.READ_PHONE_STATE,
-                Manifest.permission.READ_SMS,
-                Manifest.permission.RECEIVE_SMS,
+                Manifest.permission.READ_SMS.takeUnless { sendOnly },
+                Manifest.permission.RECEIVE_SMS.takeUnless { sendOnly },
                 Manifest.permission.SEND_SMS,
-                Manifest.permission.RECEIVE_MMS,
+                Manifest.permission.RECEIVE_MMS.takeUnless { sendOnly },
                 Manifest.permission.READ_PHONE_NUMBERS.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },
                 // Mnaseb SIM: the foreground notification must be visible on 13+.
                 Manifest.permission.POST_NOTIFICATIONS.takeIf { Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU },

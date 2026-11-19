@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    CARD-25: the same overlay as app/src/sendOnly/AndroidManifest.xml, for the sendOnlyE2e build
+    type (keep the two identical). e2e/send-only-guard.sh checks the merged result.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission
+        android:name="android.permission.RECEIVE_SMS"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.READ_SMS"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.RECEIVE_MMS"
+        tools:node="remove" />
+    <uses-permission
+        android:name="android.permission.RECEIVE_WAP_PUSH"
+        tools:node="remove" />
+
+    <application>
+        <receiver
+            android:name="me.capcom.smsgateway.modules.receiver.MessagesReceiver"
+            tools:node="remove" />
+        <receiver
+            android:name="me.capcom.smsgateway.modules.receiver.MmsReceiver"
+            tools:node="remove" />
+    </application>
+
+</manifest>

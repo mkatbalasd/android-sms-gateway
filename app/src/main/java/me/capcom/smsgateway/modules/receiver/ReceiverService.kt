@@ -6,6 +6,7 @@ import android.provider.Telephony
 import android.util.Base64
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import me.capcom.smsgateway.BuildConfig
 import me.capcom.smsgateway.domain.WebhookDelivery
 import me.capcom.smsgateway.helpers.SubscriptionsHelper
 import me.capcom.smsgateway.modules.gateway.GatewayService
@@ -44,6 +45,13 @@ class ReceiverService : KoinComponent {
     private val smsContentObserver by lazy { SmsContentObserver() }
 
     fun start(context: Context) {
+        // CARD-25: the send-only build has no incoming-SMS receivers or observers (their
+        // components and permissions are removed from its manifest); only the events receiver
+        // (export commands, which export() refuses below) is started.
+        if (BuildConfig.SEND_ONLY) {
+            eventsReceiver.start()
+            return
+        }
         MessagesReceiver.start(context)
         MmsReceiver.start(context)
         eventsReceiver.start()
@@ -54,6 +62,10 @@ class ReceiverService : KoinComponent {
     }
 
     fun stop(context: Context) {
+        if (BuildConfig.SEND_ONLY) {
+            eventsReceiver.stop()
+            return
+        }
         smsContentObserver.stop()
         mmsContentObserver.stop()
         eventsReceiver.stop()
@@ -67,6 +79,15 @@ class ReceiverService : KoinComponent {
         messageTypes: Set<IncomingMessageType>,
         webhookDelivery: WebhookDelivery,
     ) = withContext(Dispatchers.IO) {
+        if (BuildConfig.SEND_ONLY) {
+            // No READ_SMS in this build: there is no inbox to export.
+            logsService.insert(
+                LogEntry.Priority.DEBUG,
+                MODULE_NAME,
+                "ReceiverService::export - skipped, send-only build"
+            )
+            return@withContext
+        }
         logsService.insert(
             LogEntry.Priority.DEBUG,
             MODULE_NAME,
