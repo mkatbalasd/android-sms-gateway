@@ -12,9 +12,9 @@ import android.content.SharedPreferences
  *    An empty set means "received, no line": nothing is accepted.
  *  - the number-proof window: a proof was started on a slot, so its reply is accepted for a
  *    short, bounded time even before any list arrived.
- *  - [isPlatformPhone]: the explicit role of the platform phone, set only from a server setting
- *    (see IncomingMessagesSettings; it is per gateway account, not per device). DEFAULT CLOSED (false). It is never inferred from a
- *    missing list.
+ *  - [isPlatformPhone]: the explicit role of the platform phone, set only from the server's
+ *    webhook pull (a marker webhook, see PlatformRole); never from settings, the local server or
+ *    a missing list. DEFAULT CLOSED (false). Device-protected, so it survives a locked reboot.
  *
  * A CUSTOMER phone FAILS CLOSED: with no list, only an open proof window accepts. A list that
  * cannot be refreshed is kept as it was (nothing here ever replaces a list on a failure).

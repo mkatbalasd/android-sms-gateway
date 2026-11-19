@@ -73,6 +73,22 @@ server.listen(0, '127.0.0.1', async () => {
     await post(base, '/__control/lines/unavailable', { on: false });
     r = await fetch(v1 + '/app/lines', { headers: { Authorization: 'Bearer a' } });
     assert.strictEqual(r.status, 200);
+    // the platform-phone role is the marker hook of GET /webhooks (default: none = a customer phone)
+    assert.deepStrictEqual(await (await fetch(gw + '/webhooks', { headers: bearer })).json(), []);
+    await post(base, '/__control/webhooks/platform-role', { on: true });
+    let hooks = await (await fetch(gw + '/webhooks', { headers: bearer })).json();
+    assert.strictEqual(hooks.length, 1);
+    assert.strictEqual(hooks[0].event, 'system:ping');
+    assert.ok(hooks[0].url.endsWith('?mnaseb_role=platform_phone'));
+    assert.strictEqual(hooks[0].deviceId, 'gw-dev-1');
+    await post(base, '/__control/webhooks/platform-role', { on: true, deviceId: null });
+    hooks = await (await fetch(gw + '/webhooks', { headers: bearer })).json();
+    assert.ok(!('deviceId' in hooks[0]));
+    await post(base, '/__control/webhooks/unavailable', { on: true });
+    assert.strictEqual((await fetch(gw + '/webhooks', { headers: bearer })).status, 503);
+    await post(base, '/__control/webhooks/unavailable', { on: false });
+    await post(base, '/__control/webhooks/platform-role', { on: false });
+    assert.deepStrictEqual(await (await fetch(gw + '/webhooks', { headers: bearer })).json(), []);
     console.log('stub selftest OK');
     server.close(); process.exit(0);
   } catch (e) {

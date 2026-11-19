@@ -56,7 +56,7 @@ P=me.capcom.smsgateway.e2e
 # must see an app that is not linked yet; the later classes link it themselves if needed and
 # then share the linked state. (A single run orders classes arbitrarily.)
 if [ "$MODE" = smoke ]; then CLASSES="$P.E2eSmokeTest"
-else CLASSES="$P.E2eSmokeTest $P.E2eSignUpTest $P.E2eLineVerifyTest $P.E2eGatewayTest $P.E2eFailClosedTest $P.E2eOneReportPerTapTest"; fi
+else CLASSES="$P.E2eSmokeTest $P.E2eSignUpTest $P.E2eLineVerifyTest $P.E2eGatewayTest $P.E2eFailClosedTest $P.E2ePlatformRoleTest $P.E2eOneReportPerTapTest"; fi
 
 RAN=0
 : > "$OUT/instrumented-output.txt"

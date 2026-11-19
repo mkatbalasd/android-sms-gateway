@@ -61,6 +61,27 @@ object E2e {
 
     fun stub(): JSONObject = StubControl.state()
 
+    /**
+     * One run of the real WebhooksUpdateWorker against the stub (the only source of the
+     * platform-phone role). With [expectSuccess] it waits until the run succeeded, i.e. the role
+     * was applied; otherwise it lets a failed run settle and cancels WorkManager's retry.
+     */
+    fun pullWebhooks(expectSuccess: Boolean) {
+        val wm = androidx.work.WorkManager.getInstance(context)
+        val servedBefore = stub().getInt("webhooksServed")
+        val request = androidx.work.OneTimeWorkRequestBuilder<me.capcom.smsgateway.modules.gateway.workers.WebhooksUpdateWorker>().build()
+        wm.enqueue(request)
+        waitFor("the webhook pull to reach the stub") { stub().getInt("webhooksServed") > servedBefore }
+        if (expectSuccess) {
+            waitFor("the pull to finish and be applied") {
+                wm.getWorkInfoById(request.id).get()?.state == androidx.work.WorkInfo.State.SUCCEEDED
+            }
+        } else {
+            SystemClock.sleep(3_000) // settle window of a failure path, not an assertion stand-in
+            wm.cancelWorkById(request.id).result.get()
+        }
+    }
+
     fun startAccountScreen() {
         device.pressHome()
         val intent = Intent(context, AccountActivity::class.java)

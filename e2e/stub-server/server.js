@@ -27,6 +27,9 @@ function fresh() {
     device: null, devicePatches: 0,
     lines: [],
     linesUnavailable: false, // GET /app/lines answers 503 while true (CARD-24 fail-closed e2e)
+    platformRole: null,      // {deviceId|null}: GET /webhooks carries the platform-phone marker hook while set
+    webhooksUnavailable: false, // GET /webhooks answers 503 while true (a failed pull keeps the last role)
+    webhooksServed: 0,       // GET /webhooks answers (the role is read from them)
     paused: false, pauseCalls: 0, resumeCalls: 0,
     testMessagePosts: [],
     queue: [],            // gateway messages waiting for the phone
@@ -89,6 +92,13 @@ const lineView = (l) => ({
   id: l.id, slot: l.slot, msisdn_masked: '+1******000', status: l.status, method: 'MO',
   strength: 'STRONG', verified_at: l.verified_at,
 });
+
+// The marker webhook of the platform phone. deviceId null = account-scoped (the field is left out).
+function roleHook(role) {
+  const h = { id: 'role-hook-1', url: 'http://10.0.2.2:8787/e2e-role-hook?mnaseb_role=platform_phone', event: 'system:ping' };
+  if (role.deviceId) h.deviceId = role.deviceId;
+  return h;
+}
 
 function sseWrite(event, data) {
   for (const c of sseClients) c.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
@@ -241,7 +251,12 @@ function gateway(req, res, method, p, body) {
     // The real server hands the phone its E2E passphrase here; without it the app cannot encrypt an
     // inbox upload ("Passphrase is not set") and never posts an inbound SMS.
     case 'GET /settings': S.settingsServed++; return send(res, 200, { encryption: { passphrase: 'e2e-test-passphrase-0001' } });
-    case 'GET /webhooks': return send(res, 200, []);
+    // The platform-phone role is a device-scoped marker webhook in this list (event system:ping, url
+    // query exactly mnaseb_role=platform_phone). No marker = a customer phone.
+    case 'GET /webhooks':
+      S.webhooksServed++;
+      if (S.webhooksUnavailable) return fail(res, 503, 'UNAVAILABLE', 'webhooks unavailable');
+      return send(res, 200, S.platformRole ? [roleHook(S.platformRole)] : []);
     case 'GET /user/code': return send(res, 200, { code: '123456', validUntil: new Date(Date.now() + 300000).toISOString() });
     case 'PATCH /user/password': return send(res, 204);
     default: return fail(res, 404, 'NOT_FOUND', 'no such gateway route');
@@ -285,6 +300,17 @@ async function control(req, res, path, method, url) {
     case 'POST /lines/unavailable':
       S.linesUnavailable = !!(body && body.on);
       return send(res, 200, { linesUnavailable: S.linesUnavailable });
+    // The platform-phone role: body {on: true, deviceId?} serves the marker hook; {on: false} removes it.
+    // The default deviceId is this stub's device (gw-dev-1); pass deviceId: null for an account-scoped marker.
+    case 'POST /webhooks/platform-role':
+      S.platformRole = body && body.on
+        ? { deviceId: body.deviceId === null ? null : (body.deviceId || 'gw-dev-1') }
+        : null;
+      return send(res, 200, { platformRole: S.platformRole });
+    // The webhook list cannot be fetched: the phone keeps the role it had.
+    case 'POST /webhooks/unavailable':
+      S.webhooksUnavailable = !!(body && body.on);
+      return send(res, 200, { webhooksUnavailable: S.webhooksUnavailable });
     // Inbound SMS cannot be pushed from the stub; the host watcher fires it via `adb emu sms send`.
     case 'POST /inject/inbound-sms': S.smsRequests.push({ from: String(body.from).replace(/[^0-9+]/g, ''), text: String(body.text).replace(/[^0-9A-Za-z ._-]/g, '') }); return send(res, 202, { queued: S.smsRequests.length });
     case 'GET /sms-requests.txt': {

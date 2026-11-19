@@ -13,6 +13,9 @@ import androidx.work.WorkerParameters
 import me.capcom.smsgateway.domain.EntitySource
 import me.capcom.smsgateway.modules.gateway.GatewayApi
 import me.capcom.smsgateway.modules.gateway.GatewayService
+import me.capcom.smsgateway.modules.gateway.GatewaySettings
+import me.capcom.smsgateway.modules.retention.ActiveLineStore
+import me.capcom.smsgateway.modules.retention.PlatformRole
 import me.capcom.smsgateway.modules.webhooks.WebHooksService
 import me.capcom.smsgateway.modules.webhooks.domain.WebHookDTO
 import org.koin.core.component.KoinComponent
@@ -26,8 +29,14 @@ class WebhooksUpdateWorker(appContext: Context, params: WorkerParameters) :
         val webhookSvc: WebHooksService = get()
 
         try {
-            val webhooks = gatewaySvc.getWebHooks().map { it.toDTO() }
-            webhookSvc.sync(EntitySource.Cloud, webhooks)
+            val pulled = gatewaySvc.getWebHooks()
+            // The platform-phone role comes only from this pull (a device-scoped marker hook);
+            // it is set before the sync, so a database failure there cannot leave it stale. A
+            // failed pull throws above this line and keeps the last value.
+            PlatformRole.apply(get<ActiveLineStore>(), get<GatewaySettings>().deviceId) {
+                pulled.map { PlatformRole.Hook(it.event, it.url, it.deviceId, EntitySource.Cloud) }
+            }
+            webhookSvc.sync(EntitySource.Cloud, pulled.map { it.toDTO() })
         } catch (th: Throwable) {
             th.printStackTrace()
             return Result.retry()

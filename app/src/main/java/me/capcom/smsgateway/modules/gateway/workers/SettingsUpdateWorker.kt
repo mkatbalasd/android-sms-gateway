@@ -25,13 +25,8 @@ class SettingsUpdateWorker(appContext: Context, params: WorkerParameters) :
         return try {
             val settings = gatewaySvc.getSettings()
 
-            settings?.let {
-                // L7: a full answer with no `incoming` section closes the platform-phone role
-                if (me.capcom.smsgateway.modules.incoming.IncomingMessagesSettings.sectionMissing(settings)) {
-                    get<me.capcom.smsgateway.modules.retention.ActiveLineStore>().setPlatformPhone(false)
-                }
-                settingsSvc.update(settings)
-            }
+            // settings are no longer a source of the platform-phone role (see PlatformRole)
+            settings?.let { settingsSvc.update(it) }
 
             Result.success()
         } catch (th: Throwable) {

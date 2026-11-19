@@ -52,6 +52,19 @@ object StubControl {
         call("POST", "/lines/unavailable", JSONObject().put("on", on).toString())
     }
 
+    /**
+     * The platform-phone role as the server states it: while on, GET /webhooks carries the marker
+     * hook (system:ping, query mnaseb_role=platform_phone) for this phone's device. off = a customer phone.
+     */
+    fun setPlatformRole(on: Boolean) {
+        call("POST", "/webhooks/platform-role", JSONObject().put("on", on).toString())
+    }
+
+    /** While true the stub answers GET /webhooks with 503: the webhook pull fails. */
+    fun setWebhooksUnavailable(on: Boolean) {
+        call("POST", "/webhooks/unavailable", JSONObject().put("on", on).toString())
+    }
+
     /** Asks the host watcher (e2e/sms-watcher.sh) to fire `adb emu sms send` at the emulator. */
     fun requestInboundSms(from: String, text: String) {
         call("POST", "/inject/inbound-sms", JSONObject().put("from", from).put("text", text).toString())
