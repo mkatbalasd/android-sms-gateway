@@ -480,4 +480,7 @@
     <string name="unlink_title">Unlink this phone</string>
     <string name="unlink_summary">Stops sending from this phone and removes it from your account</string>
     <string name="unlink_prompt">Enter your password to unlink this phone. It will stop sending.</string>
+    <!-- CARD-25: send-only build -->
+    <string name="account_permissions_body_send_only">The app asks for three things: sending messages, reading the phone state, and notifications. This is the send-only version: it does not read incoming messages and does not capture a STOP word; record opt-out requests by hand. Type the verification code yourself.</string>
+    <string name="account_permissions_sms_granted_others_missing_send_only">The send permission is granted. Other permissions are still off (phone state, notifications). You can continue, but the SIM list needs the phone state permission; open the app settings to allow them.</string>
 </resources>

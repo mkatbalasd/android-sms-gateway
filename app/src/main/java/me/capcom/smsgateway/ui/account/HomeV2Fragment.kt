@@ -247,8 +247,9 @@ class HomeV2Fragment : Fragment() {
             ContextCompat.checkSelfPermission(ctx, permission) == PackageManager.PERMISSION_GRANTED
         return LocalChecks(
             serviceRunning = serviceRunning,
+            // CARD-25: the send-only build has no RECEIVE_SMS, so SEND_SMS alone is the check there.
             smsPermissionGranted = granted(Manifest.permission.SEND_SMS) &&
-                granted(Manifest.permission.RECEIVE_SMS),
+                (me.capcom.smsgateway.BuildConfig.SEND_ONLY || granted(Manifest.permission.RECEIVE_SMS)),
             simPresent = SubscriptionsHelper.getActiveSimCards(ctx).isNotEmpty(),
             batteryExempt = KeepAliveGuideDialogFragment.currentState(ctx, settingsHelper).batteryExempt,
         )

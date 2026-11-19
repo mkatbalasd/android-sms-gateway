@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.UserManager
 import androidx.core.content.ContextCompat
+import me.capcom.smsgateway.BuildConfig
 
 enum class PermissionLevel { ALL_GRANTED, SMS_GRANTED_OTHERS_MISSING, SMS_MISSING }
 
@@ -26,31 +27,47 @@ data class PermissionState(val missing: List<String>, val smsMissing: List<Strin
 /** The permissions the app asks for on its first screen, before any account exists. */
 object AccountPermissions {
 
-    fun required(sdkInt: Int = Build.VERSION.SDK_INT): List<String> = listOfNotNull(
+    /**
+     * CARD-25: [sendOnly] is the send-only build, which declares none of RECEIVE_SMS, READ_SMS,
+     * RECEIVE_MMS, RECEIVE_WAP_PUSH and so never asks for them.
+     */
+    fun required(
+        sdkInt: Int = Build.VERSION.SDK_INT,
+        sendOnly: Boolean = BuildConfig.SEND_ONLY,
+    ): List<String> = listOfNotNull(
         Manifest.permission.SEND_SMS,
-        Manifest.permission.RECEIVE_SMS,
-        Manifest.permission.READ_SMS,
+        Manifest.permission.RECEIVE_SMS.takeUnless { sendOnly },
+        Manifest.permission.READ_SMS.takeUnless { sendOnly },
         Manifest.permission.READ_PHONE_STATE,
-        Manifest.permission.RECEIVE_MMS,
+        Manifest.permission.RECEIVE_MMS.takeUnless { sendOnly },
         Manifest.permission.READ_PHONE_NUMBERS.takeIf { sdkInt >= Build.VERSION_CODES.TIRAMISU },
         Manifest.permission.POST_NOTIFICATIONS.takeIf { sdkInt >= Build.VERSION_CODES.TIRAMISU },
     )
 
     /** The permissions without which the phone cannot send or read the SMS the product depends on. */
-    val sms: List<String> = listOf(
-        Manifest.permission.SEND_SMS,
-        Manifest.permission.RECEIVE_SMS,
-        Manifest.permission.READ_SMS,
-    )
+    fun smsPermissions(sendOnly: Boolean = BuildConfig.SEND_ONLY): List<String> =
+        if (sendOnly) listOf(Manifest.permission.SEND_SMS)
+        else listOf(
+            Manifest.permission.SEND_SMS,
+            Manifest.permission.RECEIVE_SMS,
+            Manifest.permission.READ_SMS,
+        )
+
+    val sms: List<String> get() = smsPermissions()
 
     /**
      * The grant state of every required permission, from [isGranted] (the real runtime answer
      * of ContextCompat.checkSelfPermission). Nothing else - not Enhanced Confirmation, not a
      * restricted-settings guess - may report a permission as missing.
      */
-    fun state(sdkInt: Int = Build.VERSION.SDK_INT, isGranted: (String) -> Boolean): PermissionState {
-        val missing = required(sdkInt).filterNot(isGranted)
-        return PermissionState(missing = missing, smsMissing = missing.filter { it in sms })
+    fun state(
+        sdkInt: Int = Build.VERSION.SDK_INT,
+        sendOnly: Boolean = BuildConfig.SEND_ONLY,
+        isGranted: (String) -> Boolean,
+    ): PermissionState {
+        val missing = required(sdkInt, sendOnly).filterNot(isGranted)
+        val smsList = smsPermissions(sendOnly)
+        return PermissionState(missing = missing, smsMissing = missing.filter { it in smsList })
     }
 
     /** Evaluates the real grant state now; call again on resume, it is never cached. */
@@ -72,7 +89,8 @@ object AccountPermissions {
     private fun granted(context: Context, permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
-    fun canReadSms(context: Context): Boolean =
+    /** False in the send-only build: the verification code is typed by hand there. */
+    fun canReadSms(context: Context): Boolean = !BuildConfig.SEND_ONLY &&
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECEIVE_SMS) ==
             PackageManager.PERMISSION_GRANTED
 

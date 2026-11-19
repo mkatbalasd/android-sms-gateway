@@ -157,6 +157,8 @@ To use the application, you need to grant the following permissions:
 - **RECEIVE_SMS**: This permission is optional. If you want to receive webhooks on incoming SMS, you need to grant this permission.
 - **RECEIVE_MMS**, **RECEIVE_WAP_PUSH**: This permissions are optional. If you want to receive webhooks on incoming MMS messages, you need to grant these permissions.
 
+The Mnaseb SIM fork also builds a send-only variant without READ_SMS, RECEIVE_SMS, RECEIVE_MMS and RECEIVE_WAP_PUSH; see [docs/SEND_ONLY.md](docs/SEND_ONLY.md).
+
 ### Installation from APK
 
 1. Navigate to the [Releases](https://github.com/capcom6/android-sms-gateway/releases) page.

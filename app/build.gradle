@@ -22,6 +22,10 @@ android {
         versionName "1.0.0"
 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        // CARD-25: true only in the sendOnly build types below (no incoming-SMS permissions,
+        // receivers or observers). The default two-way build keeps false.
+        buildConfigField "boolean", "SEND_ONLY", "false"
     }
     buildFeatures {
         viewBinding true
@@ -68,6 +72,27 @@ android {
             signingConfig file("keystore.jks").exists() ? signingConfigs.release : null
             manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config"]
         }
+        // CARD-25 send-only build: the release build WITHOUT RECEIVE_SMS, READ_SMS, RECEIVE_MMS and
+        // RECEIVE_WAP_PUSH (src/sendOnly/AndroidManifest.xml removes them and the incoming
+        // receivers). Same application id and the same release signing as `release`, so the
+        // two-way release asset is untouched. Built only by `assembleSendOnly`.
+        sendOnly {
+            initWith release
+            matchingFallbacks = ['release']
+            signingConfig file("keystore.jks").exists() ? signingConfigs.release : null
+            manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config"]
+            buildConfigField "boolean", "SEND_ONLY", "true"
+        }
+        // CARD-25 e2e: the send-only manifest and code with the stub endpoint override, debug-signed.
+        // The same ".e2e" id as emulatorE2e (never installed together: separate CI jobs) so the
+        // existing e2e tests run unchanged against it.
+        sendOnlyE2e {
+            initWith emulatorE2e
+            matchingFallbacks = ['emulatorE2e', 'debug']
+            applicationIdSuffix ".e2e"
+            signingConfig signingConfigs.debug
+            buildConfigField "boolean", "SEND_ONLY", "true"
+        }
     }
     // Endpoint override (T2): emulatorE2e compiles src/e2eOn (stub URL), every other build type
     // compiles src/e2eOff (no override, no strings). A release build can therefore never carry it.
@@ -77,9 +102,12 @@ android {
         insecure.java.srcDir 'src/e2eOff/java'
         release.java.srcDir 'src/e2eOff/java'
         emulatorE2e.java.srcDir 'src/e2eOn/java'
+        sendOnly.java.srcDir 'src/e2eOff/java'
+        sendOnlyE2e.java.srcDir 'src/e2eOn/java'
+        sendOnlyE2e.manifest.srcFile 'src/sendOnly/AndroidManifest.xml'
         // The emulator e2e tests only exist for -Pe2eBuildType=emulatorE2e, so the existing
         // Instrumented Tests job (debug build, production URLs) never compiles or runs them.
-        if (project.findProperty('e2eBuildType') == 'emulatorE2e') {
+        if (project.findProperty('e2eBuildType') in ['emulatorE2e', 'sendOnlyE2e']) {
             androidTest.java.srcDir 'src/androidTestE2e/java'
         }
     }
@@ -110,6 +138,13 @@ android {
 // production URLs (and `./gradlew test`) skip it; its override is proven by the CI release guard.
 androidComponents {
     beforeVariants(selector().withBuildType("emulatorE2e")) { variantBuilder ->
+        variantBuilder.enableUnitTest = false
+    }
+    // CARD-25: the send-only types are built, not unit-tested (the JVM suites run on debug/release).
+    beforeVariants(selector().withBuildType("sendOnly")) { variantBuilder ->
+        variantBuilder.enableUnitTest = false
+    }
+    beforeVariants(selector().withBuildType("sendOnlyE2e")) { variantBuilder ->
         variantBuilder.enableUnitTest = false
     }
 }

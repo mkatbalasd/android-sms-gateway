@@ -35,6 +35,8 @@ env:
   E2E_APK: dist-e2e/app-emulatorE2e.apk
   E2E_TEST_APK: dist-e2e/app-emulatorE2e-androidTest.apk
   E2E_OUT: e2e-out
+  SEND_ONLY_APK: dist-e2e/app-sendOnlyE2e.apk
+  SEND_ONLY_TEST_APK: dist-e2e/app-sendOnlyE2e-androidTest.apk
 
 jobs:
   # ---- cheap, no emulator: stub self-test, the T2 release guard, and the APKs the emulator jobs use
@@ -85,11 +87,38 @@ jobs:
           app/build/outputs/apk/release/app-release-unsigned.apk
           app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk
 
+      # CARD-25: the send-only build (no RECEIVE_SMS, READ_SMS, RECEIVE_MMS, RECEIVE_WAP_PUSH).
+      # Unsigned here like the release above (no keystore); the e2e type is debug-signed.
+      - name: Build send-only APK (unsigned, no keystore)
+        run: |
+          ./gradlew :app:assembleSendOnly
+          ls -l app/build/outputs/apk/sendOnly/
+
+      - name: Build sendOnlyE2e APK and its test APK
+        run: ./gradlew -Pe2eBuildType=sendOnlyE2e :app:assembleSendOnlyE2e :app:assembleSendOnlyE2eAndroidTest
+
+      # CARD-25 guard: fails if the send-only manifest carries any of the four permissions or the
+      # incoming receivers; the two-way release must still carry them (control).
+      - name: Send-only guard (merged manifests)
+        run: >
+          bash e2e/send-only-guard.sh
+          app/build/outputs/apk/release/app-release-unsigned.apk
+          app/build/outputs/apk/sendOnly/app-sendOnly-unsigned.apk
+
+      # T2 on the send-only release type too: no stub override, production URLs.
+      - name: Release guard on the send-only APK
+        run: >
+          bash e2e/release-guard.sh
+          app/build/outputs/apk/sendOnly/app-sendOnly-unsigned.apk
+          app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk
+
       - name: Collect e2e APKs
         run: |
           mkdir -p dist-e2e
           cp app/build/outputs/apk/emulatorE2e/app-emulatorE2e.apk dist-e2e/
           cp app/build/outputs/apk/androidTest/emulatorE2e/app-emulatorE2e-androidTest.apk dist-e2e/
+          cp app/build/outputs/apk/sendOnlyE2e/app-sendOnlyE2e.apk dist-e2e/
+          cp app/build/outputs/apk/androidTest/sendOnlyE2e/app-sendOnlyE2e-androidTest.apk dist-e2e/
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -191,6 +220,50 @@ jobs:
           path: e2e-out/
           retention-days: 7
 
+  # ---- send-only build (CARD-25): permissions absent, send works, no crash
+  send-only:
+    name: Emulator send-only build (API 33)
+    needs: build
+    if: >
+      github.event_name == 'push' || github.event_name == 'workflow_dispatch' ||
+      (github.event_name == 'pull_request' && github.event.pull_request.draft == false)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Start clock
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: e2e-apks
+          path: dist-e2e
+      - name: Grant KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"'             | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Send-only build on the emulator
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 33
+          arch: x86_64
+          disable-animations: true
+          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          script: bash e2e/send-only-e2e.sh
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Emulator send-only build (API 33)"
+            echo "wall minutes: $(( ($(date +%s) - T0) / 60 ))"
+            echo '```'; tail -n 40 e2e-out/instrumented-output.txt 2>/dev/null; echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        if: always()
+        with:
+          name: e2e-send-only-out
+          path: e2e-out/
+          retention-days: 7
+
   # ---- Direct Boot (CARD-21): PIN, reboot, no unlock
   direct-boot:
     name: Direct Boot (API 30, FBE + PIN)
@@ -288,7 +361,7 @@ jobs:
   # ---- wall minutes of every job of this run, for the cost record
   minutes:
     name: CI minutes of this run
-    needs: [build, smoke, full, direct-boot, play-protect]
+    needs: [build, smoke, full, send-only, direct-boot, play-protect]
     if: always()
     runs-on: ubuntu-latest
     permissions:
