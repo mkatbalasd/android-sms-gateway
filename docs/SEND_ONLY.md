@@ -13,6 +13,7 @@ build saves every incoming SMS of both SIMs, including a personal one.
 | SMS / MMS receivers, inbox observers, inbox export | registered and started | **not registered, not started** |
 | send, number proof (MO), delivery reports (`SEND_SMS`) | yes | yes |
 | STOP word capture and replies | yes | **absent: record opt-outs by hand** |
+| number proof by a self-sent SMS (LOOPBACK, needs to receive it) | yes | **not possible**: it can only time out, use the two-way build for it |
 | verification code at sign-up | autofilled from the SMS | **typed by hand** (no SMS User Consent API in this app) |
 
 The app says it on the permission screen, in English and Arabic:
@@ -26,7 +27,7 @@ record opt-out requests by hand." / "هذا الإصدار للإرسال فقط
   (`tools:node="remove"`). `BuildConfig.SEND_ONLY` is `true` there and gates the code paths
   (`ReceiverService`, `AccountPermissions`, `HomeFragment`, `HomeV2Fragment`, the permission screen).
 - Build type `sendOnlyE2e`: the same with the stub-server override, debug-signed, for the emulator job.
-- Release: the tag workflow adds `...-send-only.apk` (and its `.sha256`) as a second asset, after the
+- Release: the tag workflow (after the default APK is uploaded, build and guard without secrets, and a failure here never blocks the default release) adds `...-send-only.apk` (and its `.sha256`) as a second asset, after the
   same pinned-certificate gate. The default asset and the release notes' main checksum are unchanged.
 
 ## Guards

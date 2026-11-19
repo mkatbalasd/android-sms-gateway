@@ -205,13 +205,35 @@ jobs:
           echo "continuity=${STATE}" >> "$GITHUB_OUTPUT"
           echo "Certificate against ${PREV_TAG:-no previous release}: **${STATE}**" >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Upload APK
+        if: github.ref_type == 'tag'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: mnaseb-sim-${{ steps.version.outputs.version }}
+          path: dist/
+          if-no-files-found: error
+
       # CARD-25: the send-only build (no RECEIVE_SMS, READ_SMS, RECEIVE_MMS, RECEIVE_WAP_PUSH) as a
       # SECOND, clearly named asset of a tagged release. It is never the default asset: it lives in
-      # dist-extra/, apart from dist/ that every step above and the release notes use. Same
-      # keystore and the same pinned-certificate gate as the two-way APK.
-      - name: Send-only APK (second asset)
-        id: send_only
+      # dist-extra/, apart from dist/ that every step above and the release notes use. These steps
+      # run AFTER the default APK is uploaded and are continue-on-error, so a send-only failure can
+      # never block the default release. Build and guard run with NO secrets in the environment;
+      # only the sign step holds them, exactly like the two-way path.
+      - name: Build send-only APK (unsigned, no secrets)
+        id: so_build
         if: github.ref_type == 'tag' && steps.sign.outputs.signed == 'true'
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          test ! -f app/keystore.jks
+          ./gradlew assembleSendOnly
+          test -f app/build/outputs/apk/sendOnly/app-sendOnly-unsigned.apk
+          bash e2e/send-only-guard.sh app/build/outputs/apk/release/app-release-unsigned.apk app/build/outputs/apk/sendOnly/app-sendOnly-unsigned.apk
+
+      - name: Sign send-only APK
+        id: so_sign
+        if: github.ref_type == 'tag' && steps.so_build.outcome == 'success'
+        continue-on-error: true
         env:
           KS_BASE64: ${{ secrets.MNASEB_SIM_KEYSTORE_BASE64 }}
           KS_PASSWORD: ${{ secrets.MNASEB_SIM_KEYSTORE_PASSWORD }}
@@ -220,11 +242,8 @@ jobs:
           PINNED_CERT_SHA256: "05f3a9e7b96c8306ce46c3312379d0713f5f92aca9b1a9f62492fab3a286f3e2" # CN=Mnaseb
         run: |
           set -euo pipefail
-          test ! -f app/keystore.jks
-          ./gradlew assembleSendOnly
           UNSIGNED=app/build/outputs/apk/sendOnly/app-sendOnly-unsigned.apk
           test -f "$UNSIGNED"
-          bash e2e/send-only-guard.sh app/build/outputs/apk/release/app-release-unsigned.apk "$UNSIGNED"
           BUILD_TOOLS="$ANDROID_HOME/build-tools/$(ls "$ANDROID_HOME/build-tools" | sort -V | tail -1)"
           export BUILD_TOOLS
           mkdir -p dist-extra
@@ -240,22 +259,15 @@ jobs:
           "$BUILD_TOOLS/apksigner" verify --verbose --print-certs "$OUT"
           bash .github/scripts/check-pinned-cert.sh "$OUT" > /dev/null
           (cd dist-extra && sha256sum ./*.apk > "$(basename "$OUT").sha256" && cat ./*.sha256)
-          echo "Send-only APK: `$(basename "$OUT")` (second asset, not the default)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Send-only APK: \`$(basename "$OUT")\` (second asset, not the default)" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload send-only APK
-        if: github.ref_type == 'tag' && steps.sign.outputs.signed == 'true'
+        if: github.ref_type == 'tag' && steps.so_sign.outcome == 'success'
+        continue-on-error: true
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: mnaseb-sim-send-only-${{ steps.version.outputs.version }}
           path: dist-extra/
-          if-no-files-found: error
-
-      - name: Upload APK
-        if: github.ref_type == 'tag'
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: mnaseb-sim-${{ steps.version.outputs.version }}
-          path: dist/
           if-no-files-found: error
 
   release:
@@ -277,7 +289,9 @@ jobs:
           name: mnaseb-sim-${{ needs.build.outputs.version }}
           path: dist
 
+      # Optional second asset: absent when the send-only build or signing failed (never blocks).
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        continue-on-error: true
         with:
           name: mnaseb-sim-send-only-${{ needs.build.outputs.version }}
           path: dist-extra
@@ -291,7 +305,7 @@ jobs:
         run: |
           set -euo pipefail
           ls -l dist
-          NOTES="Mnaseb SIM $VERSION (com.mnaseb.sim), built from $GITHUB_SHA. APK SHA-256: $(cut -d' ' -f1 dist/*.sha256). Signing certificate SHA-256: ${CERT:-unavailable}. Certificate against the previous release: ${CONTINUITY:-unknown}. Derived from android-sms-gateway (Apache-2.0); see NOTICE. The second asset ...-send-only.apk is the send-only build (no incoming-SMS permissions, no STOP capture); it is not the default."
+          NOTES="Mnaseb SIM $VERSION (com.mnaseb.sim), built from $GITHUB_SHA. APK SHA-256: $(cut -d' ' -f1 dist/*.sha256). Signing certificate SHA-256: ${CERT:-unavailable}. Certificate against the previous release: ${CONTINUITY:-unknown}. Derived from android-sms-gateway (Apache-2.0); see NOTICE. A second asset ...-send-only.apk, when present, is the send-only build (no incoming-SMS permissions, no STOP capture); it is not the default."
           # Only a plain X.Y.Z version (digits only) is a normal release and may become "Latest".
           # Any other shape (-rc1, -RC1, .rc1, -beta, -alpha, any suffix, an empty value) is a
           # prerelease and never Latest. VERSION is the tag with the "mnaseb-sim-v" prefix removed.
@@ -301,7 +315,11 @@ jobs:
           else
             RELEASE_FLAGS=(--prerelease)
           fi
-          gh release create "$GITHUB_REF_NAME" dist/*.apk dist/*.sha256 dist-extra/*.apk dist-extra/*.sha256 \
+          EXTRA=()
+          for f in dist-extra/*.apk dist-extra/*.sha256; do
+            if [ -f "$f" ]; then EXTRA+=("$f"); fi
+          done
+          gh release create "$GITHUB_REF_NAME" dist/*.apk dist/*.sha256 "${EXTRA[@]}" \
             --repo "$GITHUB_REPOSITORY" \
             --title "Mnaseb SIM $VERSION" \
             --notes "$NOTES" \

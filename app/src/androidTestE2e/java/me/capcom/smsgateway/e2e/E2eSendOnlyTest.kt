@@ -50,9 +50,10 @@ class E2eSendOnlyTest {
     fun thePermissionScreenSaysItIsSendOnlyAndAsksForNoIncomingPermission() {
         E2e.startAccountScreen()
         E2e.need("buttonCreateAccount").click()
-        // Fresh install: the permission screen shows the send-only sentence (resource, not text).
-        if (E2e.find("buttonAllow", 4_000) != null) {
-            assertTrue(E2e.visible("textPermissionsBody"))
-        }
+        // Fresh install: the permission screen shows the send-only sentence. Not optional: the
+        // screen must appear and its text must be the send-only string.
+        E2e.need("buttonAllow", E2e.LONG)
+        val expected = E2e.context.getString(me.capcom.smsgateway.R.string.account_permissions_body_send_only)
+        assertEquals(expected, E2e.need("textPermissionsBody").text)
     }
 }
