@@ -49,6 +49,15 @@ open class MessageStateService(
     private val lock = PerMessageLock()
 
     /**
+     * CARD-24: called under the message lock after a successful write that moved a recipient
+     * to a final state (Sent, Delivered, Failed, Cancelled); the retention service deletes
+     * the message text there once no recipient is left to send to. A failing hook never
+     * changes the outcome of the transition.
+     */
+    @Volatile
+    var finalStateHook: ((String) -> Unit)? = null
+
+    /**
      * Single-recipient transition (intent results, per-recipient send status).
      * Validates at recipient scope, writes the recipient row, then syncs the
      * stored message state from the derived recipient state under the same
@@ -208,6 +217,13 @@ open class MessageStateService(
                 error = error
             )
         )
+        if (me.capcom.smsgateway.modules.retention.RetentionPolicy.isTextFinal(target)) {
+            try {
+                finalStateHook?.invoke(row.message.id)
+            } catch (e: Exception) {
+                // retention is best effort here; the periodic clean-up repeats it
+            }
+        }
     }
 
     private fun lockKey(id: String) = "message-state:$id"

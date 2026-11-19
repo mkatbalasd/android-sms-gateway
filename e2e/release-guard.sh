@@ -10,6 +10,7 @@ set -uo pipefail
 RELEASE_APK=${1:?release apk}
 E2E_APK=${2:?emulatorE2e apk}
 MARKER='E2E_STUB_OVERRIDE_ACTIVE'
+SHIFT_MARKER='E2E_RETENTION_CLOCK_SHIFT_ACTIVE' # CARD-24 time-shift hook
 STUB_HOST='10.0.2.2:8787'
 ACCOUNT_URL='https://api.mnaseb.com/v1'
 GATEWAY_URL='https://smsgate.mnaseb.com/api/mobile/v1'
@@ -39,12 +40,14 @@ check() { # description, condition result (0 = ok)
 # positive controls first: if the grep cannot see these, nothing below proves anything
 has "$E2E" "$MARKER";           check "e2e build contains the override marker (control)" $?
 has "$E2E" "$STUB_HOST";        check "e2e build contains the stub host (control)" $?
+has "$E2E" "$SHIFT_MARKER";     check "e2e build contains the retention time-shift marker (control)" $?
 has "$REL" "$ACCOUNT_URL";      check "release still uses the production account URL" $?
 has "$REL" "$GATEWAY_URL";      check "release still uses the production gateway URL" $?
 
 # the actual T2 rule
 ! has "$REL" "$MARKER";         check "release does NOT contain the override marker" $?
 ! has "$REL" "$STUB_HOST";      check "release does NOT contain the stub host" $?
+! has "$REL" "$SHIFT_MARKER";   check "release does NOT contain the retention time-shift hook" $?
 
 if [ "$fail" -ne 0 ]; then
   echo "::error::release guard failed (closed): the e2e endpoint override must not ship in release"

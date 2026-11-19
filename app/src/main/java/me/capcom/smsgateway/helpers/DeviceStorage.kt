@@ -28,10 +28,10 @@ import kotlin.system.exitProcess
  * stay where they were, so a build from before CARD-21 still finds its data there: stale
  * (everything after the copy lives only in DE) but intact, and it keeps working. Going
  * forward again does not overwrite DE (the flag stays set), so the newer DE data wins.
- * The CE copies are only the safety net for that one release; they may be removed by a
- * LATER release, once no build older than CARD-21 is in use (a cleanup that runs only when
- * the flag is set and the user is unlocked). Until then they also keep the gateway password
- * that DE never holds, exactly as before CARD-21.
+ * The CE copies were only the safety net for that one release. CARD-24 removes them
+ * ([removeRollbackCopies], run by the retention clean-up when the flag is set, the app runs on
+ * DE and the user is unlocked): after it, a downgrade to a build older than CARD-21 starts
+ * unlinked, and no clear copy of the old messages or the gateway password is left.
  */
 object DeviceStorage {
     const val DATABASE_NAME = "gateway"
@@ -128,6 +128,31 @@ object DeviceStorage {
             Log.e(TAG, "storage copy failed ($lastFailure); using the original storage, retry at the next start")
         }
         return result
+    }
+
+    /**
+     * CARD-24: removes the credential-encrypted rollback copies (see [RollbackCopies]). Safe to
+     * call at any time: it deletes only when the copy is done, this process runs on the
+     * device-protected data and the user is unlocked. Returns the number of files removed.
+     */
+    fun removeRollbackCopies(context: Context): Int {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.N) return 0
+        return try {
+            RollbackCopies.remove(
+                migrated = isMigrated(context),
+                runningOnDeviceProtected = !useCredentialStorage,
+                unlocked = isUnlocked(context),
+                files = RollbackCopies.candidates(
+                    context.dataDir,
+                    context.getDatabasePath(DATABASE_NAME).parentFile!!,
+                    "${context.packageName}_preferences",
+                    DATABASE_NAME,
+                ),
+            )
+        } catch (e: Exception) {
+            Log.w(TAG, "rollback copies not removed: ${e.javaClass.simpleName}")
+            0
+        }
     }
 
     /**

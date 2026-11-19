@@ -37,6 +37,8 @@ class OrchestratorService(
         // and everything that only reports keeps running.
 
         logsSvc.start(context)
+        // CARD-24: the hourly clean-up (and one run now); WorkManager, so only on the full start
+        me.capcom.smsgateway.modules.retention.RetentionWorker.start(context)
         messagesSvc.start(context)
         incomingSvc.start(context)
         webHooksSvc.start(context)

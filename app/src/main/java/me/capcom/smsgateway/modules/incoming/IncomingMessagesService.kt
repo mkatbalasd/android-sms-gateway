@@ -56,8 +56,9 @@ class IncomingMessagesService(
                     MODULE_NAME,
                     "Failed to save message",
                     mapOf(
-                        "message" to message,
-                        "exception" to e.stackTraceToString(),
+                        // CARD-24: the type only; never the body or the sender
+                        "messageType" to message.javaClass.simpleName,
+                        "exception" to e.javaClass.simpleName,
                     )
                 )
             }

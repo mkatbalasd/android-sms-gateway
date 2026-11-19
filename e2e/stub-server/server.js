@@ -267,7 +267,18 @@ async function control(req, res, path, method, url) {
     case 'GET /reports': return send(res, 200, S.messageReports);
     case 'GET /heartbeat': return send(res, 200, { count: S.heartbeats.length, last: S.heartbeats[S.heartbeats.length - 1] || null, sse: S.sse });
     case 'POST /reset': S = fresh(); return send(res, 200, { reset: true });
-    case 'POST /inject/outbound': { const m = enqueue(body.to, body.text); return send(res, 201, { id: m.id }); }
+    // body.id (optional) re-sends a message under an id the phone already handled (repeat guard).
+    case 'POST /inject/outbound': {
+      const m = enqueue(body.to, body.text);
+      if (body.id) m.id = String(body.id);
+      return send(res, 201, { id: m.id });
+    }
+    // CARD-24: an active, verified line on a slot (1-based), as the platform would report it.
+    case 'POST /lines': {
+      const slot = Number(body && body.slot) || 1;
+      if (!S.lines.find((x) => x.slot === slot)) S.lines.push({ id: 'l' + slot, slot, status: 'ACTIVE', verified_at: now() });
+      return send(res, 201, { lines: S.lines.length });
+    }
     // Inbound SMS cannot be pushed from the stub; the host watcher fires it via `adb emu sms send`.
     case 'POST /inject/inbound-sms': S.smsRequests.push({ from: String(body.from).replace(/[^0-9+]/g, ''), text: String(body.text).replace(/[^0-9A-Za-z ._-]/g, '') }); return send(res, 202, { queued: S.smsRequests.length });
     case 'GET /sms-requests.txt': {

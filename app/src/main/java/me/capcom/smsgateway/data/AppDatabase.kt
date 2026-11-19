@@ -78,6 +78,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun incomingMessagesDao(): IncomingMessagesDao
     abstract fun tokensDao(): TokensDao
     abstract fun deviceKeysDao(): DeviceKeysDao
+    abstract fun retentionDao(): me.capcom.smsgateway.data.dao.RetentionDao
 
     companion object {
         fun getDatabase(context: android.content.Context): AppDatabase {
@@ -91,6 +92,13 @@ abstract class AppDatabase : RoomDatabase() {
                     MIGRATION_13_14,
                     MIGRATION_21_22,
                 )
+                .addCallback(object : RoomDatabase.Callback() {
+                    // CARD-24: a deleted or replaced value (message text, a number) is
+                    // overwritten with zeros, not left in a free page of the file.
+                    override fun onOpen(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.query("PRAGMA secure_delete = ON").close()
+                    }
+                })
                 .allowMainThreadQueries()
                 .build()
         }
