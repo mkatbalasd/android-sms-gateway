@@ -56,9 +56,23 @@ if [ "$(prop ro.crypto.type)" = "file" ]; then pass "A1 ro.crypto.type=file (FBE
 # SMS is kept and forwarded only on such a slot
 curl -fsS -X POST -H 'Content-Type: application/json' -d '{"slot":1}' "$STUB/lines" >/dev/null || { fail "could not seed the active line on the stub"; exit 1; }
 
+# ---- the platform-phone role comes only from the server's webhook pull: a marker hook for this
+# phone's device (event system:ping, query mnaseb_role=platform_phone). The stub serves it from now on.
+curl -fsS -X POST -H 'Content-Type: application/json' -d '{"on":true}' "$STUB/webhooks/platform-role" >/dev/null || { fail "could not make the stub serve the platform-role marker"; exit 1; }
+
+# root read of the role flag in the app's device-protected preferences (a boolean, no number, no text)
+role_open() {
+  adb root >/dev/null 2>&1; adb wait-for-device
+  adb shell "cat /data/user_de/0/$PKG/shared_prefs/mnaseb_active_lines.xml" 2>/dev/null | tr -d '\r' | grep -q 'name="platform_phone" value="true"'
+}
+
 # ---- prepare: link the phone through the UI, then PIN
 adb shell am instrument -w -e class me.capcom.smsgateway.e2e.E2eDirectBootTest#prepareLinkedPhone "$RUNNER" | tee "$OUT/prepare.txt"
 grep -qE "OK \([1-9][0-9]* tests?\)" "$OUT/prepare.txt" && ! grep -q "FAILURES!!!" "$OUT/prepare.txt" || { fail "prepare: the phone did not link and open a stream"; exit 1; }
+
+# positive control: the role is open and stored (device-protected) before the reboot, so the later
+# locked reads cannot pass on a blind search
+if role_open; then pass "P1 control: the platform-phone role is open in device-protected storage before the reboot"; else fail "P1 the platform-phone role is not stored after the webhook pull (the locked checks would prove nothing)"; fi
 
 CONNS0=$(stubq 'j.sse.connections')
 HB0=$(stubq 'j.heartbeats.length')
@@ -88,6 +102,9 @@ else
   fail "A3 service/stream/heartbeat before unlock not proven (service+stub seen=$A3, ce_available='${STILL_LOCKED:-<empty>}')"
 fi
 adb shell dumpsys activity services "$PKG" | grep -E "SSEForegroundService|createTime" | head -5 > "$OUT/a3-services.txt"
+
+# the role survived the locked reboot (read as root, the phone still locked)
+if [ "$(ce)" != "true" ] && role_open; then pass "P2 the platform-phone role is still open after the locked reboot (ce_available='$(ce)')"; else fail "P2 the platform-phone role was lost across the locked reboot (ce_available='$(ce)')"; fi
 
 # ---- A4: a message pushed through SSE is sent and reported while still locked
 BEFORE_SENT=$(stubq 'j.messageReports.filter(r=>r.state==="Sent").length')
@@ -173,6 +190,9 @@ for _ in $(seq 1 120); do [ "$(prop sys.boot_completed)" = 1 ] && break; sleep 2
 LOCKED_AGAIN=$(ce)
 if [ "$LOCKED_AGAIN" != "true" ]; then pass "R3 restarted and left locked (ce_available='${LOCKED_AGAIN:-<empty>}')"; else fail "R3 the phone is unlocked after the restart"; fi
 sleep 20 # the locked pipeline starts and may write; whatever it writes is searched too
+
+# the role is still open after the second locked restart, which came after an unlock and a clean-up
+if [ "$(ce)" != "true" ] && role_open; then pass "P3 the platform-phone role is still open after the second locked restart"; else fail "P3 the platform-phone role was lost across the second locked restart"; fi
 
 # ROOT read of the device-protected storage: none of what items 1, 2 and 4 remove
 if de_pull; then

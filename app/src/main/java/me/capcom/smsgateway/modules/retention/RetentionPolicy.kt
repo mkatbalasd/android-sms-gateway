@@ -115,7 +115,7 @@ object IncomingSlotFilter {
      * [simNumber] is the 1-based SIM number the receiver derives. [knownSlots] null means no list
      * was ever received. Owner decision 2026-11-19: a CUSTOMER phone FAILS CLOSED, so with no
      * list only a slot inside an open number-proof window ([proofSlots]) is accepted. Only a
-     * phone with the explicit [platformPhone] role (a server setting, default false, never
+     * phone with the explicit [platformPhone] role (a marker webhook from the server pull, default false, never
      * inferred from the missing list) stays open while it has no list. With a list, a message on
      * a slot that is neither in it nor in a proof window is dropped, whatever the role.
      */

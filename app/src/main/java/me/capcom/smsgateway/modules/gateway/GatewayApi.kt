@@ -287,6 +287,8 @@ class GatewayApi(
         val id: String,
         val url: String,
         val event: WebHookEvent,
+        /** Present when the server scopes the hook to one device; null for an account-wide hook. */
+        val deviceId: String? = null,
     )
 
     enum class ProcessingOrder {

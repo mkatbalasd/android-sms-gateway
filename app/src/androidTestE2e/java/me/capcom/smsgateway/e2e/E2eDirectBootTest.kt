@@ -52,6 +52,11 @@ class E2eDirectBootTest {
         val lines = koin<ActiveLineStore>()
         runBlocking { koin<RetentionService>().refreshActiveLines() }
         E2e.waitFor("the active line slots to be known") { lines.slots()?.contains(1) == true }
+
+        // the platform-phone role comes only from the webhook pull (the host script made the stub
+        // serve the marker hook): it must be stored, device-protected, before the reboot
+        E2e.pullWebhooks(expectSuccess = true)
+        E2e.waitFor("the platform-phone role to be open") { lines.isPlatformPhone() }
     }
 
     /**
@@ -170,6 +175,10 @@ class E2eDirectBootTest {
             val r = reports.getJSONObject(i)
             if (r.optString("state") == "Sent") sent.merge(r.getString("id"), 1, Int::plus)
         }
+        assertTrue(
+            "the platform-phone role survived the locked reboot and the unlock",
+            koin<ActiveLineStore>().isPlatformPhone()
+        )
         assertTrue("at least one message was sent while locked", sent.isNotEmpty())
         sent.forEach { (id, n) -> assertEquals("message $id reported Sent more than once", 1, n) }
     }
