@@ -112,12 +112,23 @@ object RetentionClock {
 /** Which incoming SMS are kept and forwarded: those on a slot holding an active line. */
 object IncomingSlotFilter {
     /**
-     * [simNumber] is the 1-based SIM number the receiver derives. [knownSlots] null means the list
-     * was never fetched (no app session, gateway-only link): FAIL OPEN, everything is accepted as
-     * before CARD-24. With a list, a message on an unknown slot is dropped.
+     * [simNumber] is the 1-based SIM number the receiver derives. [knownSlots] null means no list
+     * was ever received. Owner decision 2026-11-19: a CUSTOMER phone FAILS CLOSED, so with no
+     * list only a slot inside an open number-proof window ([proofSlots]) is accepted. Only a
+     * phone with the explicit [platformPhone] role (a server setting, default false, never
+     * inferred from the missing list) stays open while it has no list. With a list, a message on
+     * a slot that is neither in it nor in a proof window is dropped, whatever the role.
      */
-    fun accept(simNumber: Int?, knownSlots: Set<Int>?): Boolean =
-        knownSlots == null || (simNumber != null && simNumber in knownSlots)
+    fun accept(
+        simNumber: Int?,
+        knownSlots: Set<Int>?,
+        platformPhone: Boolean = false,
+        proofSlots: Set<Int> = emptySet(),
+    ): Boolean = when {
+        knownSlots == null && platformPhone -> true
+        simNumber == null -> false
+        else -> simNumber in proofSlots || (knownSlots != null && simNumber in knownSlots)
+    }
 
     /** Slots that hold a line of this phone that is not RETIRED (ACTIVE or a PENDING claim). */
     fun activeSlots(lines: List<AppLine>): Set<Int> =

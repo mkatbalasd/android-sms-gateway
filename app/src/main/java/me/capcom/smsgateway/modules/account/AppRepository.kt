@@ -36,28 +36,36 @@ class AppRepository(
     private val account: AccountRepository,
     /** CARD-24: told every list of lines fetched, so the receiver knows the active slots. */
     private val onLines: (List<AppLine>) -> Unit = {},
-    /** CARD-24: a proof was started on this slot; its replies must be accepted at once. */
-    private val onClaim: (Int) -> Unit = {},
+    /**
+     * CARD-24: a proof was started on this slot (with the platform's expiry in seconds, if it
+     * sent one); its replies must be accepted at once, for the bounded number-proof window.
+     */
+    private val onClaim: (Int, Long?) -> Unit = { _, _ -> },
 ) : AppClient {
 
     override suspend fun verifyLine(slot: Int, msisdn: String?): LineVerifyStart =
         account.withSession { api.verifyLine(it, LineVerifyRequest(slot, msisdn?.trim()?.ifEmpty { null })) }
             .also {
                 try {
-                    onClaim(slot)
+                    onClaim(slot, it.expiresIn)
                 } catch (e: Exception) {
                     // recording the slot must never fail the call
                 }
             }
 
-    override suspend fun lines(): List<AppLine> =
-        account.withSession { api.lines(it) }.items.orEmpty().also { lines ->
+    override suspend fun lines(): List<AppLine> {
+        // a failed call throws before this point: what the phone knows stays. An answer with no
+        // `items` is not a list either, so it never replaces the last known one with "no line".
+        val items = account.withSession { api.lines(it) }.items
+        if (items != null) {
             try {
-                onLines(lines)
+                onLines(items)
             } catch (e: Exception) {
                 // recording the slots must never fail the call
             }
         }
+        return items.orEmpty()
+    }
 
     override suspend fun home(): AppHome = account.withSession { api.home(it) }
 

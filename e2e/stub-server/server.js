@@ -26,6 +26,7 @@ function fresh() {
     enrolment: null, enrolmentComplete: null,
     device: null, devicePatches: 0,
     lines: [],
+    linesUnavailable: false, // GET /app/lines answers 503 while true (CARD-24 fail-closed e2e)
     paused: false, pauseCalls: 0, resumeCalls: 0,
     testMessagePosts: [],
     queue: [],            // gateway messages waiting for the phone
@@ -169,6 +170,7 @@ function account(req, res, method, p, body) {
       return send(res, 201, { method: 'MO', to: PLATFORM_NUMBER, text: 'MNASEB E2E', expires_in: 600 });
     }
     case 'GET /app/lines':
+      if (S.linesUnavailable) return fail(res, 503, 'UNAVAILABLE', 'lines unavailable');
       return send(res, 200, { items: S.lines.map(lineView) });
     case 'GET /app/home':
       return send(res, 200, {
@@ -279,6 +281,10 @@ async function control(req, res, path, method, url) {
       if (!S.lines.find((x) => x.slot === slot)) S.lines.push({ id: 'l' + slot, slot, status: 'ACTIVE', verified_at: now() });
       return send(res, 201, { lines: S.lines.length });
     }
+    // CARD-24 follow-up: the line list cannot be fetched (the platform is down, a bad answer).
+    case 'POST /lines/unavailable':
+      S.linesUnavailable = !!(body && body.on);
+      return send(res, 200, { linesUnavailable: S.linesUnavailable });
     // Inbound SMS cannot be pushed from the stub; the host watcher fires it via `adb emu sms send`.
     case 'POST /inject/inbound-sms': S.smsRequests.push({ from: String(body.from).replace(/[^0-9+]/g, ''), text: String(body.text).replace(/[^0-9A-Za-z ._-]/g, '') }); return send(res, 202, { queued: S.smsRequests.length });
     case 'GET /sms-requests.txt': {

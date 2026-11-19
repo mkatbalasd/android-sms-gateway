@@ -52,7 +52,10 @@ val settingsModule = module {
     }
     factory {
         IncomingMessagesSettings(
-            PreferencesStorage(get(), "incoming")
+            PreferencesStorage(get(), "incoming"),
+            onPlatformPhone = {
+                get<me.capcom.smsgateway.modules.retention.ActiveLineStore>().setPlatformPhone(it)
+            },
         )
     }
     factory {

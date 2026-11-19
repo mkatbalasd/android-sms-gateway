@@ -42,6 +42,16 @@ object StubControl {
         call("POST", "/inject/outbound", JSONObject().put("to", to).put("text", text).toString())
     }
 
+    /** An active, verified line on [slot] (1-based), as the platform would report it. */
+    fun seedLine(slot: Int) {
+        call("POST", "/lines", JSONObject().put("slot", slot).toString())
+    }
+
+    /** While true the stub answers GET /app/lines with 503: the line list cannot be fetched. */
+    fun setLinesUnavailable(on: Boolean) {
+        call("POST", "/lines/unavailable", JSONObject().put("on", on).toString())
+    }
+
     /** Asks the host watcher (e2e/sms-watcher.sh) to fire `adb emu sms send` at the emulator. */
     fun requestInboundSms(from: String, text: String) {
         call("POST", "/inject/inbound-sms", JSONObject().put("from", from).put("text", text).toString())

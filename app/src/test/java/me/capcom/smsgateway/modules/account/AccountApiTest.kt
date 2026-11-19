@@ -400,13 +400,49 @@ internal class AccountApiTest {
     private fun appRepository(
         recorder: Recorder,
         settings: AccountSettings = settingsWithSession(),
+        onLines: (List<AppLine>) -> Unit = {},
+        onClaim: (Int, Long?) -> Unit = { _, _ -> },
         handler: (HttpRequestData) -> Pair<HttpStatusCode, String>,
     ): AppRepository {
         val api = api(recorder, handler)
         val accounts = AccountRepository(
             api, settings, DeviceProfile("Pixel 7", "Android 14", "0.3.0"), now = { 1_000_000L }
         )
-        return AppRepository(api, accounts)
+        return AppRepository(api, accounts, onLines, onClaim)
+    }
+
+    // CARD-24 follow-up: the last known list survives a refresh that fails or has no list in it.
+    @Test
+    fun aFailedOrListlessRefreshNeverReachesTheLineHook() = runBlocking {
+        val recorded = mutableListOf<List<AppLine>>()
+        var answer: Pair<HttpStatusCode, String> = HttpStatusCode.OK to
+            """{"items":[{"id":"l1","slot":1,"status":"ACTIVE","verified_at":"2026-11-10T10:00:00.000Z"}]}"""
+        val repo = appRepository(Recorder(), onLines = { recorded += it }) { answer }
+
+        assertEquals(1, repo.lines().size)
+        assertEquals(1, recorded.size)
+
+        answer = HttpStatusCode.InternalServerError to """{"error":{"code":"INTERNAL","message":"x"}}"""
+        try {
+            repo.lines()
+            fail("a failed refresh must throw, not return an empty list")
+        } catch (e: Exception) {
+            // expected
+        }
+        answer = HttpStatusCode.OK to "{}"
+        assertEquals(0, repo.lines().size)
+
+        assertEquals("only the one good answer was recorded", 1, recorded.size)
+    }
+
+    @Test
+    fun startingAProofTellsTheStoreTheSlotAndThePlatformsExpiry() = runBlocking {
+        val claims = mutableListOf<Pair<Int, Long?>>()
+        val repo = appRepository(Recorder(), onClaim = { slot, ttl -> claims += slot to ttl }) {
+            HttpStatusCode.Created to """{"method":"MO","to":"+967700000001","text":"MNASEB 7K2Q","expires_in":600}"""
+        }
+        repo.verifyLine(2, null)
+        assertEquals(listOf(2 to 600L), claims)
     }
 
     @Test
