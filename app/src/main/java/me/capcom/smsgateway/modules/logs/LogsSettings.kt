@@ -1,5 +1,6 @@
 package me.capcom.smsgateway.modules.logs
 
+import me.capcom.smsgateway.modules.retention.RetentionPolicy
 import me.capcom.smsgateway.modules.settings.Exporter
 import me.capcom.smsgateway.modules.settings.Importer
 import me.capcom.smsgateway.modules.settings.KeyValueStorage
@@ -28,13 +29,18 @@ class LogsSettings(
             storage.set(LIFETIME_DAYS, "30")
         }
 
+        if (version < 2) {
+            // CARD-24: logs are kept 7 days (was 30; an owner's longer or disabled value too)
+            storage.set(LIFETIME_DAYS, RetentionPolicy.LOG_LIFETIME_DAYS.toString())
+        }
+
         version = VERSION_CODE
     }
 
     companion object {
         private const val LIFETIME_DAYS = "lifetime_days"
 
-        private const val VERSION_CODE = 1
+        private const val VERSION_CODE = 2
         private const val VERSION = "version"
     }
 

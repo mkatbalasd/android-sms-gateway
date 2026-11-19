@@ -52,6 +52,10 @@ say "API $(prop ro.build.version.sdk), image $(prop ro.product.model), crypto ty
 # ---- A1: file-based encryption present (else the rest cannot prove anything)
 if [ "$(prop ro.crypto.type)" = "file" ]; then pass "A1 ro.crypto.type=file (FBE)"; else fail "A1 image is not FBE; Direct Boot is not provable here"; fi
 
+# ---- CARD-24: the platform reports an active line on slot 1, the emulator's only SIM; an inbound
+# SMS is kept and forwarded only on such a slot
+curl -fsS -X POST -H 'Content-Type: application/json' -d '{"slot":1}' "$STUB/lines" >/dev/null || { fail "could not seed the active line on the stub"; exit 1; }
+
 # ---- prepare: link the phone through the UI, then PIN
 adb shell am instrument -w -e class me.capcom.smsgateway.e2e.E2eDirectBootTest#prepareLinkedPhone "$RUNNER" | tee "$OUT/prepare.txt"
 grep -qE "OK \([1-9][0-9]* tests?\)" "$OUT/prepare.txt" && ! grep -q "FAILURES!!!" "$OUT/prepare.txt" || { fail "prepare: the phone did not link and open a stream"; exit 1; }
@@ -123,6 +127,64 @@ else
   fail "A8 after-unlock assertions failed (see after-unlock.txt)"
 fi
 adb shell dumpsys jobscheduler | grep -c "$PKG" > "$OUT/a8-jobs-count.txt"
+
+# ---- CARD-24: the phone is a relay, not an archive.
+# Data of the test: the locked send (text + recipient) and the locked inbound SMS (body + sender).
+TEXT_OUT="e2e locked send"; NUM_OUT="15550000000"; BODY_IN="e2e locked inbound"; SENDER_IN="5551234"
+DE_DIR="/data/user_de/0/$PKG"
+
+# root read of the app's device-protected storage: pulled to the host, searched there (counts only)
+de_pull() {
+  adb root >/dev/null 2>&1; adb wait-for-device
+  rm -rf "$OUT/de"; mkdir -p "$OUT/de"
+  adb pull "$DE_DIR" "$OUT/de" >/dev/null 2>&1
+  [ -f "$OUT/de/$PKG/databases/gateway" ] || [ -f "$OUT/de/databases/gateway" ]
+}
+de_hits() { grep -rlaF -- "$1" "$OUT/de" 2>/dev/null | wc -l | tr -d ' '; }
+
+# the unlocked phone, inside every window: the instrumented side checks the text is gone, the
+# bare id is there, and plants the rollback copies an upgraded phone has
+adb shell am instrument -w -e class me.capcom.smsgateway.e2e.E2eDirectBootTest#retentionBeforeShift "$RUNNER" | tee "$OUT/retention-before.txt"
+if grep -qE "OK \([1-9][0-9]* tests?\)" "$OUT/retention-before.txt" && ! grep -q "FAILURES!!!" "$OUT/retention-before.txt"; then
+  pass "R0 text deleted at the final state, id row present, recipient still inside its window"
+else
+  fail "R0 before-shift assertions failed (see retention-before.txt)"
+fi
+if de_pull; then
+  # positive control: the recipient number is still stored (24h window not over), so the search can see it
+  [ "$(de_hits "$NUM_OUT")" -gt 0 ] && pass "R1 control: the recipient number is still in device-protected storage inside its window" \
+    || info "R1 control: the recipient number was not found inside its window (the search may be blind)"
+else
+  fail "R1 root read of device-protected storage failed (adb root or pull)"
+fi
+
+# the time shift (emulatorE2e only) and the clean-up, through the real service
+adb shell am instrument -w -e class me.capcom.smsgateway.e2e.E2eDirectBootTest#retentionAfterShift "$RUNNER" | tee "$OUT/retention-after.txt"
+if grep -qE "OK \([1-9][0-9]* tests?\)" "$OUT/retention-after.txt" && ! grep -q "FAILURES!!!" "$OUT/retention-after.txt"; then
+  pass "R2 after +4 days: recipient deleted, incoming text and sender deleted, rollback copies removed, a repeated id is refused"
+else
+  fail "R2 after-shift assertions failed (see retention-after.txt)"
+fi
+
+# restart and leave the phone locked
+adb reboot
+adb wait-for-device
+for _ in $(seq 1 120); do [ "$(prop sys.boot_completed)" = 1 ] && break; sleep 2; done
+LOCKED_AGAIN=$(ce)
+if [ "$LOCKED_AGAIN" != "true" ]; then pass "R3 restarted and left locked (ce_available='${LOCKED_AGAIN:-<empty>}')"; else fail "R3 the phone is unlocked after the restart"; fi
+sleep 20 # the locked pipeline starts and may write; whatever it writes is searched too
+
+# ROOT read of the device-protected storage: none of what items 1, 2 and 4 remove
+if de_pull; then
+  for pair in "message text:$TEXT_OUT" "recipient number:$NUM_OUT" "incoming body:$BODY_IN" "incoming sender:$SENDER_IN"; do
+    label=${pair%%:*}; needle=${pair#*:}
+    hits=$(de_hits "$needle")
+    if [ "$hits" = 0 ]; then pass "R4 root read while locked: no $label in device-protected storage"; else fail "R4 root read while locked: $label found in $hits file(s)"; fi
+  done
+  ls -R "$OUT/de" 2>/dev/null | grep -qE "^(gateway|mnaseb_device_storage.xml)$" && info "R4 the storage read is the app's (database present)"
+else
+  fail "R4 root read of device-protected storage failed (adb root or pull)"
+fi
 
 # tidy: remove the PIN so the emulator image is not left locked
 adb shell locksettings clear --old "$PIN" >/dev/null 2>&1

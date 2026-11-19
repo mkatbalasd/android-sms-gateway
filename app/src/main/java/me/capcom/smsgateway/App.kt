@@ -81,6 +81,7 @@ class App: Application() {
                 deviceModule,
                 me.capcom.smsgateway.modules.account.accountModule,
                 me.capcom.smsgateway.modules.gateway.workSchedulerModule,
+                me.capcom.smsgateway.modules.retention.retentionModule,
             )
         }
 

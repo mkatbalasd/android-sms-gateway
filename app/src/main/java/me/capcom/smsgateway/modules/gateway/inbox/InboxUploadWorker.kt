@@ -35,6 +35,7 @@ class InboxUploadWorker(
     private val logsSvc: LogsService by inject()
     private val repository: InboxUploadRepository by inject()
     private val gatewayService: GatewayService by inject()
+    private val retention: me.capcom.smsgateway.modules.retention.RetentionService by inject()
     private val gson = GsonBuilder().configure().create()
 
     companion object {
@@ -105,13 +106,20 @@ class InboxUploadWorker(
         try {
             gatewayService.uploadInbox(messages)
             repository.complete(ids)
+            // CARD-24: the server has them; the local copy of their text goes now
+            retention.onInboxAcknowledged(entities)
         } catch (e: Exception) {
             if (entities.size == 1) {
                 logsSvc.insert(
                     LogEntry.Priority.ERROR,
                     MODULE_NAME,
                     "Inbox upload failed: ${e.message}",
-                    mapOf("message" to entities[0], "error" to e.toString()),
+                    // CARD-24: the id and type only (the entity holds the sender and the content)
+                    mapOf(
+                        "messageId" to entities[0].messageId,
+                        "type" to entities[0].type,
+                        "error" to e.javaClass.simpleName,
+                    ),
                 )
                 repository.complete(ids)
             } else {

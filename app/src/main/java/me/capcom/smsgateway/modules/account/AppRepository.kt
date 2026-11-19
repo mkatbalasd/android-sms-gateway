@@ -34,13 +34,21 @@ interface AppClient {
 class AppRepository(
     private val api: AppBackend,
     private val account: AccountRepository,
+    /** CARD-24: told every list of lines fetched, so the receiver knows the active slots. */
+    private val onLines: (List<AppLine>) -> Unit = {},
 ) : AppClient {
 
     override suspend fun verifyLine(slot: Int, msisdn: String?): LineVerifyStart =
         account.withSession { api.verifyLine(it, LineVerifyRequest(slot, msisdn?.trim()?.ifEmpty { null })) }
 
     override suspend fun lines(): List<AppLine> =
-        account.withSession { api.lines(it) }.items.orEmpty()
+        account.withSession { api.lines(it) }.items.orEmpty().also { lines ->
+            try {
+                onLines(lines)
+            } catch (e: Exception) {
+                // recording the slots must never fail the call
+            }
+        }
 
     override suspend fun home(): AppHome = account.withSession { api.home(it) }
 

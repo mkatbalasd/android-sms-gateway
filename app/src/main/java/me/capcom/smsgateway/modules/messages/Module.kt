@@ -10,7 +10,15 @@ import org.koin.dsl.module
 val messagesModule = module {
     singleOf(::MessagesRepository)
     singleOf(::MessagesService)
-    singleOf(::MessageStateService)
+    single {
+        MessageStateService(get(), get()).also { machine ->
+            // CARD-24: the text goes when every recipient is in a final state
+            machine.finalStateHook = { id ->
+                get<me.capcom.smsgateway.modules.retention.RetentionService>()
+                    .onMessageStateChanged(id)
+            }
+        }
+    }
     single<PendingStore> { RoomPendingStore(get(), get()) { get<MessagesService>().sendGate } }
     viewModel { MessagesListViewModel(get()) }
     viewModel { MessageDetailsViewModel(get()) }

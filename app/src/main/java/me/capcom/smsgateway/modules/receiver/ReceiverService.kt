@@ -14,6 +14,7 @@ import me.capcom.smsgateway.modules.incoming.db.IncomingMessageType
 import me.capcom.smsgateway.modules.logs.LogsService
 import me.capcom.smsgateway.modules.logs.db.LogEntry
 import me.capcom.smsgateway.modules.receiver.data.InboxMessage
+import me.capcom.smsgateway.modules.retention.IncomingSlotFilter
 import me.capcom.smsgateway.modules.webhooks.WebHooksService
 import me.capcom.smsgateway.modules.webhooks.domain.WebHookEvent
 import me.capcom.smsgateway.modules.webhooks.payload.MmsBatchDownloadedPayload
@@ -34,6 +35,7 @@ class ReceiverService : KoinComponent {
     private val receiverSettings: ReceiverSettings by inject()
     private val gatewayService: GatewayService by inject()
     private val stateStorage: StateStorage by inject()
+    private val activeLines: me.capcom.smsgateway.modules.retention.ActiveLineStore by inject()
 
     private val appContext: Context by inject()
 
@@ -199,6 +201,22 @@ class ReceiverService : KoinComponent {
             SubscriptionsHelper.getSimSlotIndex(context, it)
         }
         val simNumber = SubscriptionsHelper.simNumberForSlotIndex(simSlotIndex)
+        // CARD-24: only an SMS that arrives on a slot holding an ACTIVE line of the account is
+        // kept and forwarded. Any other (the owner's personal SIM, an unknown slot) is dropped
+        // here: not stored, not forwarded, and never logged with a body or a sender.
+        if (!IncomingSlotFilter.accept(simNumber, activeLines.slots())) {
+            logsService.insert(
+                LogEntry.Priority.DEBUG,
+                MODULE_NAME,
+                "ReceiverService - dropped, the SIM slot holds no active line",
+                mapOf(
+                    "messageType" to message.javaClass.simpleName,
+                    "simNumber" to simNumber,
+                )
+            )
+            return null
+        }
+
         val recipient = simSlotIndex?.let {
             SubscriptionsHelper.getPhoneNumber(context, it)
         }

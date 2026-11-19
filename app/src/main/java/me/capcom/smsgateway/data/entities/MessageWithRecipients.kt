@@ -21,6 +21,9 @@ data class MessageWithRecipients(
 ) {
     val state: me.capcom.smsgateway.domain.ProcessingState
         get() = when {
+            // CARD-24: the recipients were deleted after their retention window; the stored
+            // state is all that is left (an empty list would otherwise read as "all Failed")
+            recipients.isEmpty() -> message.state
 recipients.any { it.state == me.capcom.smsgateway.domain.ProcessingState.Pending } -> me.capcom.smsgateway.domain.ProcessingState.Pending
             recipients.any { it.state == me.capcom.smsgateway.domain.ProcessingState.Cancelled } -> me.capcom.smsgateway.domain.ProcessingState.Cancelled
             recipients.any { it.state == me.capcom.smsgateway.domain.ProcessingState.Processed } -> me.capcom.smsgateway.domain.ProcessingState.Processed

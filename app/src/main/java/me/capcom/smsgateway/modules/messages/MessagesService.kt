@@ -186,10 +186,11 @@ class MessagesService(
             LogEntry.Priority.DEBUG,
             MODULE_NAME,
             "Status intent received with action ${intent.action} and result code $resultCode",
+            // CARD-24: the message id only. The data string is "id|recipient number" and the
+            // status PDU carries the recipient address: neither goes into the log.
             mapOf(
-                "data" to intent.dataString,
+                "messageId" to intent.dataString?.substringBefore('|'),
                 "uri" to intent.extras?.getString("uri"),
-                "pdu" to intent.extras?.getByteArray("pdu")?.joinToString("") { "%02x".format(it) },
             )
         )
 
