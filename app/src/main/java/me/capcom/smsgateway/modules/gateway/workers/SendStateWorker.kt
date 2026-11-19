@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
@@ -29,22 +30,24 @@ class SendStateWorker(appContext: Context, params: WorkerParameters) :
             val messageId = inputData.getString(MESSAGE_ID) ?: return Result.failure()
             val message = messagesService.getMessage(messageId) ?: return Result.failure()
 
-            withContext(Dispatchers.IO) {
-                gatewayService.sendState(
-                    GatewayApi.MessagePatchRequest(
-                        message.message.id,
-                        message.message.state,
-                        message.recipients.map {
-                            GatewayApi.RecipientState(
-                                it.phoneNumber,
-                                it.state,
-                                it.error
-                            )
-                        },
-                        message.states.associate { it.state to Date(it.updatedAt) },
+            val request = GatewayApi.MessagePatchRequest(
+                message.message.id,
+                message.message.state,
+                message.recipients.map {
+                    GatewayApi.RecipientState(
+                        it.phoneNumber,
+                        it.state,
+                        it.error
                     )
-                )
-            }
+                },
+                message.states.associate { it.state to Date(it.updatedAt) },
+            )
+            // V2-L47: every state change enqueues a run and each run posts the CURRENT state, so
+            // a late run for an earlier change would post the same final state a second time.
+            if (StateReportDedup.shared.isDuplicate(request)) return Result.success()
+
+            withContext(Dispatchers.IO) { gatewayService.sendState(request) }
+            StateReportDedup.shared.markPosted(request)
             return Result.success()
         } catch (th: Throwable) {
             th.printStackTrace()
@@ -75,8 +78,13 @@ class SendStateWorker(appContext: Context, params: WorkerParameters) :
                 )
                 .build()
 
+            // V2-L47: one chain per message id. APPEND_OR_REPLACE runs the reports of one id one
+            // after the other (never two at once, which is what let two runs post the same state
+            // together) and keeps every queued report, so each state change is still reported in
+            // order; a failed predecessor does not cancel the next one. Repeated identical state
+            // is dropped in doWork by StateReportDedup.
             WorkManager.getInstance(context)
-                .enqueue(work)
+                .enqueueUniqueWork("send-state:$messageId", ExistingWorkPolicy.APPEND_OR_REPLACE, work)
         }
     }
 }
