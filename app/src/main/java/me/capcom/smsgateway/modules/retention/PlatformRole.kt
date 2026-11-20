@@ -25,10 +25,23 @@ object PlatformRole {
         val source: EntitySource,
     )
 
-    /** True only for a url whose whole query is the marker: `...?mnaseb_role=platform_phone`. */
+    /**
+     * True only for an absolute http(s) URL with a host whose real raw query is exactly the marker
+     * and that has no fragment. Parsed with [java.net.URI] (the text after the first `?` inside a
+     * fragment is not a query); the raw query is compared, so an encoded variant never matches.
+     * A malformed URL is false and never throws.
+     */
     fun isMarkerUrl(url: String): Boolean {
-        val q = url.indexOf('?')
-        return q > 0 && url.substring(q + 1) == MARKER_QUERY
+        val uri = try {
+            java.net.URI(url)
+        } catch (e: java.net.URISyntaxException) {
+            return false
+        }
+        val scheme = uri.scheme?.lowercase()
+        return (scheme == "https" || scheme == "http") &&
+            !uri.host.isNullOrEmpty() &&
+            uri.rawFragment == null &&
+            uri.rawQuery == MARKER_QUERY
     }
 
     /**

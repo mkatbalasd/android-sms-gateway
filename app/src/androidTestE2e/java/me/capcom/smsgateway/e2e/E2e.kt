@@ -77,8 +77,24 @@ object E2e {
                 wm.getWorkInfoById(request.id).get()?.state == androidx.work.WorkInfo.State.SUCCEEDED
             }
         } else {
-            SystemClock.sleep(3_000) // settle window of a failure path, not an assertion stand-in
+            // The worker answers a failed pull with Result.retry(), so the run ends as ENQUEUED with
+            // runAttemptCount >= 1 (never FAILED); a run that wrongly succeeded ends SUCCEEDED. Wait
+            // (bounded) for either, then fail the step on SUCCEEDED, so a slow run is never a pass.
+            var last: androidx.work.WorkInfo? = null
+            waitFor("the failed pull to finish its attempt", timeoutMs = 30_000L) {
+                last = wm.getWorkInfoById(request.id).get()
+                val info = last
+                info != null && (
+                    info.state == androidx.work.WorkInfo.State.SUCCEEDED ||
+                        info.state == androidx.work.WorkInfo.State.FAILED ||
+                        info.state == androidx.work.WorkInfo.State.CANCELLED ||
+                        (info.state == androidx.work.WorkInfo.State.ENQUEUED && info.runAttemptCount >= 1)
+                    )
+            }
             wm.cancelWorkById(request.id).result.get()
+            if (last?.state == androidx.work.WorkInfo.State.SUCCEEDED) {
+                fail("the pull was expected to fail but the worker succeeded")
+            }
         }
     }
 
