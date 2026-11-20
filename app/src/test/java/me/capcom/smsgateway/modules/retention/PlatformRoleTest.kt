@@ -72,6 +72,34 @@ class PlatformRoleTest {
     }
 
     @Test
+    fun theMarkerIsTheRealQueryWithNoFragment() {
+        // V2-L63: a `?` inside a fragment is not a query
+        listOf(
+            "https://h/x#?mnaseb_role=platform_phone",
+            "https://h/x#a?mnaseb_role=platform_phone",
+            "https://h/x?mnaseb_role=platform_phone#x",
+            "https://h/x?mnaseb_role=platform_phone#",
+            // encoded variants
+            "https://h/x?mnaseb%5Frole=platform_phone",
+            "https://h/x?mnaseb_role=platform%5Fphone",
+            "https://h/x?mnaseb_role%3Dplatform_phone",
+            "https://h/x?mnaseb_role=platform%5fphone",
+            // not a usable absolute URL
+            "ftp://h/x?mnaseb_role=platform_phone",
+            "http:///x?mnaseb_role=platform_phone",
+            "https://h/x?mnaseb_role=platform_phone\u0000",
+            "https://h:bad/x?mnaseb_role=platform_phone",
+            "ht tp://h/x?mnaseb_role=platform_phone",
+            "https://[::1/x?mnaseb_role=platform_phone",
+        ).forEach {
+            assertFalse("url must not count: $it", PlatformRole.isMarkerUrl(it))
+        }
+        assertTrue(PlatformRole.isMarkerUrl("https://h/x?mnaseb_role=platform_phone"))
+        assertTrue(PlatformRole.isMarkerUrl("HTTPS://H/x?mnaseb_role=platform_phone"))
+        assertTrue(PlatformRole.isMarkerUrl("http://10.0.2.2:8787/hook?mnaseb_role=platform_phone"))
+    }
+
+    @Test
     fun aLocalSourceHookNeverCounts() {
         assertFalse(role(hook(source = EntitySource.Local)))
         assertFalse(role(hook(source = EntitySource.Local, deviceId = null)))

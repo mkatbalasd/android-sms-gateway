@@ -7,7 +7,8 @@ import me.capcom.smsgateway.data.AppDatabase
 import me.capcom.smsgateway.domain.EntitySource
 import me.capcom.smsgateway.modules.retention.ActiveLineStore
 import me.capcom.smsgateway.modules.retention.RetentionService
-import me.capcom.smsgateway.modules.settings.SettingsService
+import me.capcom.smsgateway.modules.localserver.LocalServerService
+import me.capcom.smsgateway.modules.localserver.LocalServerSettings
 import me.capcom.smsgateway.modules.webhooks.WebHooksService
 import me.capcom.smsgateway.modules.webhooks.domain.WebHookDTO
 import me.capcom.smsgateway.modules.webhooks.domain.WebHookEvent
@@ -17,6 +18,11 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
+import okhttp3.Credentials
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
 import org.koin.core.context.GlobalContext
 
 /**
@@ -50,6 +56,24 @@ class E2ePlatformRoleTest {
     )
 
     private fun inboxCount() = E2e.stub().getJSONArray("inbox").length()
+
+    /** One request to the app's own local server; returns the HTTP status (-1 when it is not reachable yet). */
+    private fun httpStatus(
+        method: String,
+        url: String,
+        body: String? = null,
+        basicUser: String? = null,
+        basicPassword: String? = null,
+    ): Int {
+        val req = Request.Builder().url(url)
+            .method(method, body?.toRequestBody("application/json".toMediaType()))
+        if (basicUser != null) req.header("Authorization", Credentials.basic(basicUser, basicPassword ?: ""))
+        return try {
+            OkHttpClient().newCall(req.build()).execute().use { it.code }
+        } catch (e: java.io.IOException) {
+            -1
+        }
+    }
 
     private fun pull(expectSuccess: Boolean) = E2e.pullWebhooks(expectSuccess)
 
@@ -149,6 +173,8 @@ class E2ePlatformRoleTest {
         E2e.waitFor("the app to read /settings") { E2e.stub().getInt("settingsServed") >= 1 }
         val lines = koin<ActiveLineStore>()
         val hooks = koin<WebHooksService>()
+        val server = koin<LocalServerSettings>()
+        var startedServer = false
         var localId: String? = null
 
         try {
@@ -172,14 +198,32 @@ class E2ePlatformRoleTest {
             localId = created.id
             assertFalse("a Local marker hook did not open the role", lines.isPlatformPhone())
 
-            // what a local PATCH /settings does: an incoming section naming the role
-            koin<SettingsService>().update(mapOf("incoming" to mapOf("platform_phone" to true)))
+            // a local PATCH /settings through the real local server route, with an incoming section
+            // naming the role (the server is started here and put back as it was in the finally)
+            if (!server.enabled) {
+                server.enabled = true
+                startedServer = true
+            }
+            koin<LocalServerService>().start(E2e.context)
+            val base = "http://127.0.0.1:${server.port}"
+            E2e.waitFor("the local server to answer /health") { httpStatus("GET", "$base/health") == 200 }
+            val code = httpStatus(
+                "PATCH", "$base/settings",
+                body = """{"incoming":{"platform_phone":true}}""",
+                basicUser = server.username, basicPassword = server.password,
+            )
+            // the route must really have been reached (200 applied, 400 refused); 401/404 would be a vacuous pass
+            assertTrue("the local PATCH /settings route answered (status $code)", code == 200 || code == 400)
             assertFalse("a settings write did not open the role", lines.isPlatformPhone())
 
             assertPersonalSmsDropped(lines)
             assertFalse("still closed after the SMS", lines.isPlatformPhone())
         } finally {
             localId?.let { hooks.delete(EntitySource.Local, it) }
+            if (startedServer) {
+                koin<LocalServerService>().stop(E2e.context)
+                server.enabled = false
+            }
             restore()
         }
     }
