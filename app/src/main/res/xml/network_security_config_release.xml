@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!--
+  R5-7: network security config of the shipped build types (release and sendOnly).
+  System trust anchors ONLY: no user-installed CA and no bundled upstream CA (@raw/ca).
+  Cleartext stays off, except the loopback address (the on-phone local server).
+  The debug build type keeps network_security_config.xml; the e2e types keep the _insecure one.
+  Guarded by NetworkSecurityConfigTest and the "Release trust anchors gate" step of
+  mnaseb-sim-release.yml: never add a trust source other than the system store here.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">127.0.0.1</domain>
+    </domain-config>
+</network-security-config>
