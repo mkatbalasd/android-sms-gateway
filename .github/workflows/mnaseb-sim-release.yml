@@ -100,6 +100,13 @@ jobs:
           grep -E 'applicationId|versionName|versionCode' app/build.gradle
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
 
+      # HARD GATE (R5-7, Tier T2): the shipped build types (release and sendOnly) must trust the
+      # system CA store only: no user CA, no bundled @raw/ca. Fails closed (a missing file, build
+      # type or placeholder is a failure). It runs before the build, so nothing is built or
+      # published from a config that trusts a user-installed CA.
+      - name: Release trust anchors gate
+        run: bash .github/scripts/check-release-trust-anchors.sh .
+
       - name: Unit tests
         run: ./gradlew test
 
@@ -296,6 +303,32 @@ jobs:
           name: mnaseb-sim-send-only-${{ needs.build.outputs.version }}
           path: dist-extra
 
+      # V2-L63 (h): the tag this run was started for must still exist and still point at the
+      # commit that was built. A tag deleted (or moved) mid-run would otherwise make
+      # `gh release create` make a new lightweight tag at the default branch head.
+      - name: Verify the tag still points at the built commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          AUTH="$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          OUT="$(git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${AUTH}" \
+            ls-remote --tags "https://github.com/${GITHUB_REPOSITORY}.git" \
+            "refs/tags/${GITHUB_REF_NAME}" "refs/tags/${GITHUB_REF_NAME}^{}")"
+          DIRECT="$(printf '%s\n' "$OUT" | awk -v r="refs/tags/${GITHUB_REF_NAME}" '$2 == r { print $1 }')"
+          PEELED="$(printf '%s\n' "$OUT" | awk -v r="refs/tags/${GITHUB_REF_NAME}^{}" '$2 == r { print $1 }')"
+          if [ -z "$DIRECT" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} no longer exists on the remote - not publishing"
+            exit 1
+          fi
+          # an annotated tag lists the commit as the peeled entry; a lightweight tag points at it directly
+          TARGET="${PEELED:-$DIRECT}"
+          if [ "$TARGET" != "$GITHUB_SHA" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} now points at ${TARGET}, not at the built commit ${GITHUB_SHA} - not publishing"
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} still points at ${GITHUB_SHA}"
+
       - name: Create release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -321,6 +354,7 @@ jobs:
           done
           gh release create "$GITHUB_REF_NAME" dist/*.apk dist/*.sha256 "${EXTRA[@]}" \
             --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" \
             --title "Mnaseb SIM $VERSION" \
             --notes "$NOTES" \
             "${RELEASE_FLAGS[@]}"
