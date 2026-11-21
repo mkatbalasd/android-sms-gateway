@@ -8,6 +8,9 @@ on:
     branches: [mnaseb-sim]
     paths:
       - ".github/scripts/check-pinned-cert*.sh"
+      - ".github/scripts/check-release-trust-anchors*.sh"
+      - "app/build.gradle"
+      - "app/src/main/res/xml/network_security_config*.xml"
       - ".github/workflows/mnaseb-sim-release.yml"
       - ".github/workflows/mnaseb-sim-cert-gate-test.yml"
 
@@ -33,3 +36,39 @@ jobs:
           test -n "$gate" && test -n "$upload" && test "$gate" -lt "$upload"
           # the gate step block (up to the next step) must not contain continue-on-error
           ! sed -n "${gate},/name: Certificate continuity/p" "$f" | grep -q 'continue-on-error'
+
+  trust-anchors-gate:
+    name: Release trust anchors gate self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      # R5-7: the gate passes on this tree and fails on a config with a user CA, a bundled CA,
+      # a non-system anchor in a domain config, a missing file or a missing build type.
+      - name: Run self-test
+        run: bash .github/scripts/check-release-trust-anchors-test.sh
+
+      - name: Gate is hard and precedes the build
+        run: |
+          set -euo pipefail
+          f=.github/workflows/mnaseb-sim-release.yml
+          gate=$(grep -n 'name: Release trust anchors gate' "$f" | cut -d: -f1)
+          tests=$(grep -n 'name: Unit tests' "$f" | cut -d: -f1)
+          build=$(grep -n 'name: Build release APK (unsigned)' "$f" | cut -d: -f1)
+          test -n "$gate" && test -n "$tests" && test -n "$build"
+          test "$gate" -lt "$tests" && test "$gate" -lt "$build"
+          # the gate step block (up to the next step) must not be soft
+          ! sed -n "${gate},/name: Unit tests/p" "$f" | grep -q 'continue-on-error'
+          # and it must run the script
+          sed -n "${gate},/name: Unit tests/p" "$f" | grep -q 'check-release-trust-anchors.sh'
+
+      - name: Release creation checks the tag and targets the built commit
+        run: |
+          set -euo pipefail
+          f=.github/workflows/mnaseb-sim-release.yml
+          verify=$(grep -n 'name: Verify the tag still points at the built commit' "$f" | cut -d: -f1)
+          create=$(grep -n 'name: Create release' "$f" | cut -d: -f1)
+          test -n "$verify" && test -n "$create" && test "$verify" -lt "$create"
+          ! sed -n "${verify},/name: Create release/p" "$f" | grep -q 'continue-on-error'
+          grep -q 'ls-remote --tags' "$f"
+          sed -n "${create},\$p" "$f" | grep -q -- '--target "\$GITHUB_SHA"'

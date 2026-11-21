@@ -70,7 +70,8 @@ android {
             // Mnaseb SIM: without app/keystore.jks the release APK is built
             // unsigned (never debug-signed); CI signs it with apksigner.
             signingConfig file("keystore.jks").exists() ? signingConfigs.release : null
-            manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config"]
+            // R5-7: system trust anchors only (no user CA, no bundled upstream CA)
+            manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config_release"]
         }
         // CARD-25 send-only build: the release build WITHOUT RECEIVE_SMS, READ_SMS, RECEIVE_MMS and
         // RECEIVE_WAP_PUSH (src/sendOnly/AndroidManifest.xml removes them and the incoming
@@ -80,7 +81,8 @@ android {
             initWith release
             matchingFallbacks = ['release']
             signingConfig file("keystore.jks").exists() ? signingConfigs.release : null
-            manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config"]
+            // R5-7: same system-only trust anchors as release
+            manifestPlaceholders = [networkSecurityConfig: "@xml/network_security_config_release"]
             buildConfigField "boolean", "SEND_ONLY", "true"
         }
         // CARD-25 e2e: the send-only manifest and code with the stub endpoint override, debug-signed.
